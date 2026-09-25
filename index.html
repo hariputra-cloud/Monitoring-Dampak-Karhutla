@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Monitoring Dampak Operasional Penerbangan</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS for Excel parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js DataLabels Plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+    <!-- html2pdf for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0B1120; /* Darker modern background */
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(30, 58, 138, 0.15) 0, transparent 50%), 
+                radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.1) 0, transparent 50%),
+                radial-gradient(at 50% 100%, rgba(14, 165, 233, 0.1) 0, transparent 50%);
+            background-attachment: fixed;
+            color: #94A3B8;
+        }
+        
+        /* Modern Glassmorphism Panel Style */
+        .airport-card {
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-radius: 1.25rem;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            padding: 1.5rem;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .airport-card:hover {
+            border-color: rgba(59, 130, 246, 0.4);
+            box-shadow: 0 10px 40px -10px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+        /* KPI card top accent borders - Modernized with glow gradients */
+        .kpi-total { border-top: 4px solid #3B82F6; background: linear-gradient(180deg, rgba(59,130,246,0.1) 0%, rgba(15,23,42,0) 100%), rgba(15, 23, 42, 0.55); }
+        .kpi-delay { border-top: 4px solid #F59E0B; background: linear-gradient(180deg, rgba(245,158,11,0.08) 0%, rgba(15,23,42,0) 100%), rgba(15, 23, 42, 0.55); }
+        .kpi-cancel { border-top: 4px solid #EF4444; background: linear-gradient(180deg, rgba(239,68,68,0.08) 0%, rgba(15,23,42,0) 100%), rgba(15, 23, 42, 0.55); }
+        .kpi-divert { border-top: 4px solid #8B5CF6; background: linear-gradient(180deg, rgba(139,92,246,0.08) 0%, rgba(15,23,42,0) 100%), rgba(15, 23, 42, 0.55); }
+        .kpi-rtb { border-top: 4px solid #0EA5E9; background: linear-gradient(180deg, rgba(14,165,233,0.08) 0%, rgba(15,23,42,0) 100%), rgba(15, 23, 42, 0.55); }
+
+        /* Custom dark scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0F172A; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        
+        .table-container::-webkit-scrollbar { width: 5px; height: 5px; }
+
+        /* Dropzone animation */
+        @keyframes pulse-border {
+            0% { border-color: rgba(59, 130, 246, 0.3); }
+            50% { border-color: rgba(59, 130, 246, 0.8); box-shadow: 0 0 20px rgba(59, 130, 246, 0.25); }
+            100% { border-color: rgba(59, 130, 246, 0.3); }
+        }
+        .dropzone {
+            background: rgba(15, 23, 42, 0.6);
+            border-color: rgba(51, 65, 85, 0.8);
+        }
+        .dropzone:hover { animation: pulse-border 2s infinite; }
+
+        /* Form Controls Dark Theme */
+        select, input[type="date"] {
+            color: #F8FAFC !important;
+            background-color: rgba(15, 23, 42, 0.7) !important;
+            border-color: rgba(51, 65, 85, 0.8) !important;
+            color-scheme: dark;
+        }
+        select:focus, input[type="date"]:focus {
+            border-color: #3B82F6 !important;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) !important;
+            outline: none;
+        }
+        select option {
+            background-color: #1E293B;
+            color: #F8FAFC;
+        }
+
+        /* Table Styling */
+        th {
+            background-color: rgba(15, 23, 42, 0.9) !important;
+            color: #94A3B8 !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+        }
+        td {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03) !important;
+            color: #CBD5E1 !important;
+        }
+        tbody tr:hover {
+            background-color: rgba(255, 255, 255, 0.04) !important;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden text-slate-300">
+
+    <!-- Hidden Master File Input for Re-uploading -->
+    <input type="file" id="excel-file" accept=".xlsx, .xls, .csv" class="hidden">
+
+    <!-- Top Navigation Bar -->
+    <nav class="bg-[#0B1121]/90 backdrop-blur-md text-white shadow-[0_4px_30px_rgba(0,0,0,0.5)] z-10 flex-shrink-0 border-b border-slate-800">
+        <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-3.5">
+                    <div class="bg-blue-500/10 p-2.5 rounded-xl border border-blue-500/20 shadow-[0_0_12px_rgba(59,130,246,0.2)]">
+                        <i class="fa-solid fa-plane-triangle text-blue-400 text-xl"></i>
+                    </div>
+                    <div>
+                        <span class="font-bold text-lg tracking-wide block leading-tight text-slate-100">Monitoring Dampak Operasional Penerbangan</span>
+                        <span class="text-[11px] text-blue-400 font-medium tracking-wider block">Airport Safety & RFF Group</span>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <!-- Export PDF Button -->
+                    <button id="export-pdf-btn" onclick="exportToPDF()" class="hidden sm:flex items-center gap-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all shadow-sm">
+                        <i class="fa-solid fa-file-pdf text-rose-400"></i>
+                        <span>Export PDF</span>
+                    </button>
+                    <!-- Upload Data Baru Button in Header -->
+                    <button id="header-upload-btn" class="hidden sm:flex items-center gap-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all shadow-sm">
+                        <i class="fa-solid fa-file-arrow-up text-blue-400"></i>
+                        <span>Upload Data Baru</span>
+                    </button>
+                    
+                    <div class="flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-lg border border-slate-700/60 text-xs">
+                        <i class="fa-solid fa-circle-dot text-emerald-400 text-[10px] animate-pulse"></i>
+                        <span class="text-slate-300 font-mono" id="last-updated">Status: Menunggu Data</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 relative">
+        <div class="max-w-[1400px] mx-auto space-y-6">
+
+            <!-- Initial File Upload Dropzone -->
+            <div id="upload-section" class="airport-card text-center py-16 sm:py-24 dropzone border-2 border-dashed cursor-pointer relative group my-auto">
+                <div class="space-y-6 transition-transform transform group-hover:-translate-y-1">
+                    <div class="w-20 h-20 bg-blue-900/30 rounded-2xl flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(59,130,246,0.2)] border border-blue-500/30">
+                        <i class="fa-solid fa-file-excel text-4xl text-blue-400"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-bold text-slate-100 tracking-wide">Upload File Data Irregularity</h3>
+                        <p class="text-sm text-slate-400 mt-2 max-w-md mx-auto">Pilih file Excel (<span class="text-blue-400 font-mono">.xlsx, .csv</span>) berisi laporan penerbangan untuk menampilkan dashboard analisis.</p>
+                    </div>
+                    <button type="button" onclick="triggerFileInput()" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg shadow-[0_0_15px_rgba(37,99,235,0.4)] text-sm font-semibold tracking-wide transition-all">
+                        <i class="fa-solid fa-folder-open"></i> PILIH FILE EXCEL
+                    </button>
+                </div>
+                
+                <!-- Loading Overlay -->
+                <div id="loading-overlay" class="hidden absolute inset-0 bg-[#0B1121]/90 backdrop-blur-md flex flex-col items-center justify-center rounded-xl z-20 border border-slate-700">
+                    <div class="relative w-16 h-16 flex items-center justify-center mb-4">
+                         <div class="absolute inset-0 border-t-2 border-blue-500 rounded-full animate-spin"></div>
+                         <i class="fa-solid fa-plane text-blue-400 text-xl"></i>
+                    </div>
+                    <p class="text-slate-100 font-semibold text-sm tracking-wider uppercase font-mono">Memproses Data Excel...</p>
+                    <p class="text-slate-400 text-xs mt-1">Membaca dan menyusun data ketidakberangkatan/delay penerbangan</p>
+                </div>
+            </div>
+
+            <!-- Dashboard Main Section (Hidden initially) -->
+            <div id="dashboard-content" class="hidden space-y-6">
+                
+                <!-- Filters Control Panel -->
+                <div class="airport-card flex flex-col md:flex-row gap-4 items-center justify-between z-20 relative p-5">
+                    <div class="flex items-center justify-between w-full md:w-auto gap-4">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-slate-800 p-2.5 rounded-xl border border-slate-700">
+                                <i class="fa-solid fa-filter text-blue-400"></i>
+                            </div>
+                            <div>
+                                <h2 class="font-bold text-slate-200 text-xs uppercase tracking-wider font-mono">Filter Data</h2>
+                                <p class="text-[11px] text-slate-400">Sesuaikan tampilan grafik & laporan</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto flex-1 md:justify-end flex-wrap items-center">
+                        <div class="flex-1 min-w-[130px] w-full sm:w-auto">
+                            <label for="month-filter" class="block text-[11px] font-medium text-slate-400 mb-1">Periode Bulan</label>
+                            <select id="month-filter" class="w-full rounded-lg text-xs p-2.5 border font-medium">
+                                <option value="all">Semua Bulan</option>
+                            </select>
+                        </div>
+                        <div class="flex-1 min-w-[130px] w-full sm:w-auto">
+                            <label for="date-filter" class="block text-[11px] font-medium text-slate-400 mb-1">Tanggal Spesifik</label>
+                            <input type="date" id="date-filter" class="w-full rounded-lg text-xs p-2 border font-medium">
+                        </div>
+                        <div class="flex-1 min-w-[130px] w-full sm:w-auto">
+                            <label for="airport-filter" class="block text-[11px] font-medium text-slate-400 mb-1">Bandara / Stasiun</label>
+                            <select id="airport-filter" class="w-full rounded-lg text-xs p-2.5 border font-medium">
+                                <option value="all">Semua Bandara</option>
+                            </select>
+                        </div>
+                        <div class="flex-1 min-w-[130px] w-full sm:w-auto">
+                            <label for="category-filter" class="block text-[11px] font-medium text-slate-400 mb-1">Jenis Irregularity</label>
+                            <select id="category-filter" class="w-full rounded-lg text-xs p-2.5 border font-medium">
+                                <option value="all">Semua Jenis</option>
+                                <option value="DELAY">DELAY</option>
+                                <option value="CANCEL">CANCEL</option>
+                                <option value="DIVERT">DIVERT</option>
+                                <option value="RTB">RTB</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="flex items-center gap-2 w-full sm:w-auto pt-2 sm:pt-0 self-end">
+                            <button id="reset-filters" class="flex-1 sm:flex-none bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-xs font-semibold px-3.5 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-rotate-right"></i> Reset
+                            </button>
+                            <button onclick="triggerFileInput()" class="flex-1 sm:flex-none bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 text-xs font-semibold px-3.5 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-cloud-arrow-up text-blue-400"></i> Ganti Data
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPI Summary Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <!-- Total Kejadian -->
+                    <div class="airport-card kpi-total flex items-center justify-between">
+                        <div>
+                            <p class="text-[11px] font-semibold text-blue-400 uppercase tracking-wider mb-1">Total Kejadian</p>
+                            <p class="text-3xl font-extrabold text-white tracking-tight" id="kpi-total">0</p>
+                        </div>
+                        <div class="p-3 bg-blue-500/20 rounded-xl border border-blue-500/30">
+                            <i class="fa-solid fa-triangle-exclamation text-blue-400 text-xl"></i>
+                        </div>
+                    </div>
+                    <!-- Total Delay -->
+                    <div class="airport-card kpi-delay flex items-center justify-between group">
+                        <div>
+                            <p class="text-[11px] font-semibold text-amber-400 uppercase tracking-wider mb-1">Total Delay</p>
+                            <p class="text-3xl font-extrabold text-slate-100 group-hover:text-amber-400 transition-colors" id="kpi-delay">0</p>
+                        </div>
+                        <div class="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                            <i class="fa-solid fa-clock text-amber-400 text-xl"></i>
+                        </div>
+                    </div>
+                    <!-- Total Cancel -->
+                    <div class="airport-card kpi-cancel flex items-center justify-between group">
+                        <div>
+                            <p class="text-[11px] font-semibold text-red-400 uppercase tracking-wider mb-1">Total Cancel</p>
+                            <p class="text-3xl font-extrabold text-slate-100 group-hover:text-red-400 transition-colors" id="kpi-cancel">0</p>
+                        </div>
+                        <div class="p-3 bg-red-500/10 rounded-xl border border-red-500/20">
+                            <i class="fa-solid fa-ban text-red-400 text-xl"></i>
+                        </div>
+                    </div>
+                    <!-- Total Divert -->
+                    <div class="airport-card kpi-divert flex items-center justify-between group">
+                        <div>
+                            <p class="text-[11px] font-semibold text-purple-400 uppercase tracking-wider mb-1">Total Divert</p>
+                            <p class="text-3xl font-extrabold text-slate-100 group-hover:text-purple-400 transition-colors" id="kpi-divert">0</p>
+                        </div>
+                        <div class="p-3 bg-purple-500/10 rounded-xl border border-purple-500/20">
+                            <i class="fa-solid fa-route text-purple-400 text-xl"></i>
+                        </div>
+                    </div>
+                    <!-- Total RTB -->
+                    <div class="airport-card kpi-rtb flex items-center justify-between group">
+                        <div>
+                            <p class="text-[11px] font-semibold text-sky-400 uppercase tracking-wider mb-1">Total RTB</p>
+                            <p class="text-3xl font-extrabold text-slate-100 group-hover:text-sky-400 transition-colors" id="kpi-rtb">0</p>
+                        </div>
+                        <div class="p-3 bg-sky-500/10 rounded-xl border border-sky-500/20">
+                            <i class="fa-solid fa-rotate-left text-sky-400 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TOP TREND PEAK DATE & NARRATIVE CARD (NEW) -->
+                <div class="airport-card border-l-4 border-l-rose-500 bg-gradient-to-r from-rose-950/20 via-slate-900/60 to-slate-900/40">
+                    <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+                        <div class="space-y-2 flex-1">
+                            <div class="flex items-center gap-2 text-xs font-bold text-rose-400 uppercase tracking-wider">
+                                <i class="fa-solid fa-fire-flame-curved text-rose-500 text-sm animate-bounce"></i>
+                                <span>Puncak Tanggal Gangguan Terbanyak (Top Peak Date)</span>
+                            </div>
+                            <div class="flex items-baseline gap-3 flex-wrap">
+                                <h3 class="text-2xl font-black text-white font-mono tracking-tight" id="peak-date-display">-</h3>
+                                <span class="bg-rose-500/20 border border-rose-500/40 text-rose-300 font-bold px-3 py-1 rounded-full text-xs" id="peak-date-count">0 Kejadian</span>
+                            </div>
+                            <!-- Editorial / Dynamic Narrative Text for Peak Date -->
+                            <div class="pt-2 border-t border-slate-800/80">
+                                <p class="text-xs text-slate-300 leading-relaxed font-sans" id="peak-date-redaksi">
+                                    Memuat analisa tanggal puncak gangguan...
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Mini Breakdown Badges on Peak Date -->
+                        <div class="flex flex-wrap gap-2 lg:flex-col lg:items-end justify-start min-w-[200px]" id="peak-date-breakdown">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row 1: Full Width Trend Chart -->
+                <div class="grid grid-cols-1 gap-6 mb-6">
+                    <!-- Chronological Trend Chart -->
+                    <div class="airport-card flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-chart-line text-blue-400"></i>
+                                    <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Trend Harian Irregularity Penerbangan</h3>
+                                </div>
+                                <span class="text-[11px] text-slate-400 font-mono" id="trend-subtitle">Semua Data</span>
+                            </div>
+                            <div class="relative h-[340px] w-full">
+                                <canvas id="trendChart"></canvas>
+                            </div>
+                        </div>
+                        <!-- Redaksi Analisa Box -->
+                        <div class="mt-4 p-3.5 bg-slate-800/40 border border-slate-700/60 rounded-xl text-xs text-slate-300 flex items-start gap-3">
+                            <div class="bg-blue-500/10 p-2 rounded-lg text-blue-400 mt-0.5 border border-blue-500/20 flex-shrink-0">
+                                <i class="fa-solid fa-chart-line"></i>
+                            </div>
+                            <div class="space-y-1">
+                                <span class="font-semibold text-slate-200 block text-[11px] uppercase tracking-wider">Redaksi Analisa Tren Harian:</span>
+                                <p id="trend-redaksi" class="leading-relaxed text-slate-300">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row 2: Full Width Multi-Airport Line Chart -->
+                <div class="grid grid-cols-1 gap-6 mb-6">
+                    <!-- Multi-Airport Line Comparison Chart -->
+                    <div class="airport-card flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-diagram-project text-emerald-400"></i>
+                                    <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Perbandingan Trend Dampak Antar Bandara</h3>
+                                </div>
+                            </div>
+                            <div class="relative h-[380px] w-full">
+                                <canvas id="multiAirportLineChart"></canvas>
+                            </div>
+                        </div>
+                        <!-- Redaksi Analisa Box -->
+                        <div class="mt-4 p-3.5 bg-slate-800/40 border border-slate-700/60 rounded-xl text-xs text-slate-300 flex items-start gap-3">
+                            <div class="bg-emerald-500/10 p-2 rounded-lg text-emerald-400 mt-0.5 border border-emerald-500/20 flex-shrink-0">
+                                <i class="fa-solid fa-diagram-project"></i>
+                            </div>
+                            <div class="space-y-1">
+                                <span class="font-semibold text-slate-200 block text-[11px] uppercase tracking-wider">Redaksi Analisa Tren Antar Bandara:</span>
+                                <p id="multi-airport-redaksi" class="leading-relaxed text-slate-300">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row 3: Full Width Airport Volume -->
+                <div class="grid grid-cols-1 gap-6 mb-6">
+                    <!-- Irregularity per Airport Chart -->
+                    <div class="airport-card flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2 mb-4">
+                                <i class="fa-solid fa-plane-arrival text-amber-400"></i>
+                                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Total Irregularity per Bandara (Top 20)</h3>
+                            </div>
+                            <div class="relative h-[400px] w-full">
+                                <canvas id="airportChart"></canvas>
+                            </div>
+                        </div>
+                        <!-- Redaksi Analisa Box -->
+                        <div class="mt-4 p-3.5 bg-slate-800/40 border border-slate-700/60 rounded-xl text-xs text-slate-300 flex items-start gap-3">
+                            <div class="bg-amber-500/10 p-2 rounded-lg text-amber-400 mt-0.5 border border-amber-500/20 flex-shrink-0">
+                                <i class="fa-solid fa-ranking-star"></i>
+                            </div>
+                            <div class="space-y-1">
+                                <span class="font-semibold text-slate-200 block text-[11px] uppercase tracking-wider">Redaksi Analisa Akumulasi Bandara:</span>
+                                <p id="airport-volume-redaksi" class="leading-relaxed text-slate-300">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row 4: Donut Charts (Composition & Airport Dist) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <!-- Event Composition Chart -->
+                    <div class="airport-card flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2 mb-4">
+                                <i class="fa-solid fa-chart-pie text-purple-400"></i>
+                                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Komposisi Jenis Irregularity</h3>
+                            </div>
+                            <div class="relative flex-1 w-full flex justify-center pb-2 min-h-[280px]">
+                                <canvas id="compositionChart"></canvas>
+                            </div>
+                        </div>
+                        <!-- Redaksi Analisa Box -->
+                        <div class="mt-4 p-3.5 bg-slate-800/40 border border-slate-700/60 rounded-xl text-xs text-slate-300 flex items-start gap-3">
+                            <div class="bg-purple-500/10 p-2 rounded-lg text-purple-400 mt-0.5 border border-purple-500/20 flex-shrink-0">
+                                <i class="fa-solid fa-chart-pie"></i>
+                            </div>
+                            <div class="space-y-1">
+                                <span class="font-semibold text-slate-200 block text-[11px] uppercase tracking-wider">Redaksi Komposisi Jenis Gangguan:</span>
+                                <p id="composition-redaksi" class="leading-relaxed text-slate-300">-</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Airport Percentage Donut Chart -->
+                    <div class="airport-card flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2 mb-4">
+                                <i class="fa-solid fa-earth-asia text-sky-400"></i>
+                                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Persentase Gangguan Bandara</h3>
+                            </div>
+                            <div class="relative flex-1 w-full flex justify-center pb-2 min-h-[280px]">
+                                <canvas id="airportDonutChart"></canvas>
+                            </div>
+                        </div>
+                        <!-- Redaksi Analisa Box -->
+                        <div class="mt-4 p-3.5 bg-slate-800/40 border border-slate-700/60 rounded-xl text-xs text-slate-300 flex items-start gap-3">
+                            <div class="bg-sky-500/10 p-2 rounded-lg text-sky-400 mt-0.5 border border-sky-500/20 flex-shrink-0">
+                                <i class="fa-solid fa-earth-asia"></i>
+                            </div>
+                            <div class="space-y-1">
+                                <span class="font-semibold text-slate-200 block text-[11px] uppercase tracking-wider">Redaksi Proporsi Bandara Terdampak:</span>
+                                <p id="airport-donut-redaksi" class="leading-relaxed text-slate-300">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data Table Log Preview -->
+                <div class="airport-card">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-table-list text-slate-400"></i>
+                            <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Rincian Data Irregularity (50 Data Terakhir)</h3>
+                        </div>
+                        <span class="text-xs text-slate-400 font-mono" id="table-count-label">0 Data Ditampilkan</span>
+                    </div>
+                    <div class="table-container overflow-x-auto max-h-80 border border-slate-700/60 rounded-xl bg-[#0F172A]/50">
+                        <table class="min-w-full divide-y divide-slate-700/80">
+                            <thead class="sticky top-0 z-10">
+                                <tr>
+                                    <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Tanggal Penerbangan</th>
+                                    <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Bandara / Stasiun</th>
+                                    <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">No. Penerbangan</th>
+                                    <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Jenis Irregularity</th>
+                                    <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Keterangan / Remark</th>
+                                </tr>
+                            </thead>
+                            <tbody id="data-table-body" class="divide-y divide-slate-800 text-xs text-slate-300">
+                                <!-- Dynamic Rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div> <!-- End Dashboard Content -->
+        </div>
+    </main>
+
+    <script>
+        // Global Data Variables
+        let rawData = [];
+        let filteredData = [];
+        
+        // Active Chart Instances
+        let trendChartInstance = null;
+        let compositionChartInstance = null;
+        let airportChartInstance = null;
+        let multiAirportLineChartInstance = null;
+        let airportDonutChartInstance = null;
+
+        // Global Chart styling defaults
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        Chart.defaults.color = '#94A3B8';
+
+        // Specific colors for Irregularity Types
+        const chartColors = {
+            DELAY: '#FBBF24',  // Amber
+            CANCEL: '#F87171', // Red
+            DIVERT: '#A78BFA', // Violet
+            RTB: '#38BDF8'     // Sky blue
+        };
+        
+        const gridConfig = { 
+            color: 'rgba(51, 65, 85, 0.25)', 
+            drawBorder: false,
+            borderDash: [5, 5] // Modern dashed grid
+        };
+
+        // Flexible Excel Column Mapping
+        const COLUMN_MAPPINGS = {
+            date: ['date', 'tanggal', 'flight date', 'tgl', 'date of flight', 'flt_date'],
+            airport: ['airport', 'bandara', 'station', 'stn', 'origin', 'dest', 'loc', 'lokasi'],
+            flightNo: ['flight no', 'flight', 'flt no', 'nomor penerbangan', 'flt', 'no penerbangan', 'flt_no'],
+            type: ['type', 'jenis', 'irregularity type', 'status', 'category', 'jenis irregularity', 'irreg_type'],
+            remark: ['remark', 'reason', 'keterangan', 'delay reason', 'alasan', 'remarks', 'dampak']
+        };
+
+        const IRREG_TYPES = {
+            DELAY: ['delay', 'dly'],
+            CANCEL: ['cancel', 'cancellation', 'cnl', 'batal'],
+            DIVERT: ['divert', 'diversion', 'dvt', 'pengalihan'],
+            RTB: ['rtb', 'return to base', 'kembali ke bandara asal']
+        };
+
+        // UI Elements
+        const fileInput = document.getElementById('excel-file');
+        const uploadSection = document.getElementById('upload-section');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const dashboardContent = document.getElementById('dashboard-content');
+        const lastUpdated = document.getElementById('last-updated');
+        const headerUploadBtn = document.getElementById('header-upload-btn');
+        
+        // Filter Elements
+        const monthFilter = document.getElementById('month-filter');
+        const dateFilter = document.getElementById('date-filter');
+        const airportFilter = document.getElementById('airport-filter');
+        const categoryFilter = document.getElementById('category-filter');
+        const resetBtn = document.getElementById('reset-filters');
+
+        // Helper function to trigger file selection dialog
+        function triggerFileInput() {
+            fileInput.value = ''; // Reset file input
+            fileInput.click();
+        }
+
+        headerUploadBtn.addEventListener('click', triggerFileInput);
+        fileInput.addEventListener('change', handleFileUpload);
+
+        monthFilter.addEventListener('change', () => { dateFilter.value = ''; updateDashboard(); });
+        dateFilter.addEventListener('change', () => { monthFilter.value = 'all'; updateDashboard(); });
+        airportFilter.addEventListener('change', updateDashboard);
+        categoryFilter.addEventListener('change', updateDashboard);
+        resetBtn.addEventListener('click', resetFilters);
+
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            loadingOverlay.classList.remove('hidden');
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const data = new Uint8Array(evt.target.result);
+                    const workbook = XLSX.read(data, {type: 'array', cellDates: true});
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet, {raw: false, dateNF: 'yyyy-mm-dd'});
+                    
+                    processExcelData(json, file.name);
+                } catch (error) {
+                    console.error("Error parsing Excel:", error);
+                    alert("Gagal membaca file Excel. Pastikan format file sesuai (.xlsx atau .csv).");
+                } finally {
+                    loadingOverlay.classList.add('hidden');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function findColumnName(keys, possibleNames) {
+            for (let possibleName of possibleNames) {
+                const match = keys.find(k => k.toLowerCase().trim().includes(possibleName));
+                if (match) return match;
+            }
+            return null;
+        }
+
+        function normalizeType(rawType) {
+            if (!rawType) return 'OTHER';
+            const lowerType = String(rawType).toLowerCase().trim();
+            for (const [standardType, variants] of Object.entries(IRREG_TYPES)) {
+                if (variants.some(v => lowerType.includes(v))) {
+                    return standardType;
+                }
+            }
+            return 'OTHER';
+        }
+
+        function formatDateIndonesia(dateStr) {
+            if (!dateStr || dateStr === '-') return '-';
+            try {
+                const parts = dateStr.split('-');
+                if (parts.length === 3) {
+                    const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+                    return dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'Long', year: 'numeric' });
+                }
+            } catch (e) {}
+            return dateStr;
+        }
+
+        function processExcelData(jsonArray, fileName) {
+            if (!jsonArray || jsonArray.length === 0) {
+                alert("File Excel yang Anda unggah kosong.");
+                return;
+            }
+
+            const sampleRow = jsonArray[0];
+            const keys = Object.keys(sampleRow);
+
+            const dateCol = findColumnName(keys, COLUMN_MAPPINGS.date);
+            const airportCol = findColumnName(keys, COLUMN_MAPPINGS.airport);
+            const typeCol = findColumnName(keys, COLUMN_MAPPINGS.type);
+            const flightNoCol = findColumnName(keys, COLUMN_MAPPINGS.flightNo);
+            const remarkCol = findColumnName(keys, COLUMN_MAPPINGS.remark);
+
+            if (!dateCol || !airportCol || !typeCol) {
+                let msg = "Kolom yang dibutuhkan tidak terdeteksi pada file Excel.\n";
+                msg += `Headers ditemukan: ${keys.join(', ')}\n\n`;
+                msg += `Kolom wajib: Tanggal, Bandara, dan Jenis Irregularity.`;
+                alert(msg);
+                return;
+            }
+
+            rawData = jsonArray.map(row => {
+                let parsedDate = null;
+                let monthName = null;
+                if (row[dateCol]) {
+                    let d = new Date(row[dateCol]);
+                    if (!isNaN(d)) {
+                        parsedDate = d.toISOString().split('T')[0]; 
+                        monthName = d.toLocaleString('id-ID', { month: 'short', year: 'numeric' }).toUpperCase();
+                    }
+                }
+
+                return {
+                    date: parsedDate || row[dateCol],
+                    month: monthName || 'LAINNYA',
+                    airport: String(row[airportCol] || 'LAINNYA').toUpperCase().trim(),
+                    rawType: row[typeCol],
+                    type: normalizeType(row[typeCol]),
+                    flightNo: row[flightNoCol] || '-',
+                    remark: row[remarkCol] || '-'
+                };
+            }).filter(item => item.date && item.type !== 'OTHER'); 
+
+            if (rawData.length === 0) {
+                alert("Tidak ditemukan baris data irregularity penerbangan yang valid.");
+                return;
+            }
+
+            initializeFilters();
+            
+            uploadSection.classList.add('hidden');
+            dashboardContent.classList.remove('hidden');
+            headerUploadBtn.classList.remove('hidden');
+            
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            lastUpdated.innerHTML = `File: <span class="text-blue-400 font-semibold">${fileName}</span> (${timeStr})`;
+
+            updateDashboard();
+        }
+
+        function initializeFilters() {
+            const months = [...new Set(rawData.map(item => item.month))].sort((a, b) => new Date(a) - new Date(b));
+            
+            monthFilter.innerHTML = '<option value="all">Semua Bulan</option>';
+            months.forEach(m => {
+                if(m !== 'LAINNYA') monthFilter.innerHTML += `<option value="${m}">${m}</option>`;
+            });
+
+            const airports = [...new Set(rawData.map(item => item.airport))].sort();
+            airportFilter.innerHTML = '<option value="all">Semua Bandara</option>';
+            airports.forEach(a => {
+                airportFilter.innerHTML += `<option value="${a}">${a}</option>`;
+            });
+        }
+
+        function resetFilters() {
+            monthFilter.value = 'all';
+            dateFilter.value = '';
+            airportFilter.value = 'all';
+            categoryFilter.value = 'all';
+            updateDashboard();
+        }
+
+        function updateDashboard() {
+            const selectedMonth = monthFilter.value;
+            const selectedDate = dateFilter.value;
+            const selectedAirport = airportFilter.value;
+            const selectedCategory = categoryFilter.value;
+
+            filteredData = rawData.filter(item => {
+                let matchMonth = true, matchDate = true, matchAirport = true, matchCategory = true;
+                if (selectedDate) matchDate = item.date === selectedDate;
+                else if (selectedMonth !== 'all') matchMonth = item.month === selectedMonth;
+                if (selectedAirport !== 'all') matchAirport = item.airport === selectedAirport;
+                if (selectedCategory !== 'all') matchCategory = item.type === selectedCategory;
+                return matchMonth && matchDate && matchAirport && matchCategory;
+            });
+
+            // Update Subtitle Trend
+            const trendSub = document.getElementById('trend-subtitle');
+            if (selectedAirport !== 'all') {
+                trendSub.innerText = `Bandara: ${selectedAirport}`;
+            } else {
+                trendSub.innerText = `Semua Bandara (${filteredData.length} Data)`;
+            }
+
+            updateKPIs();
+            updatePeakDateAndAnalysis();
+            updateCharts();
+            updateTable();
+        }
+
+        function updateKPIs() {
+            let delays = 0, cancels = 0, diverts = 0, rtbs = 0;
+            filteredData.forEach(item => {
+                if (item.type === 'DELAY') delays++;
+                else if (item.type === 'CANCEL') cancels++;
+                else if (item.type === 'DIVERT') diverts++;
+                else if (item.type === 'RTB') rtbs++;
+            });
+
+            const totalKejadian = delays + cancels + diverts + rtbs;
+
+            document.getElementById('kpi-total').innerText = totalKejadian.toLocaleString('id-ID');
+            document.getElementById('kpi-delay').innerText = delays.toLocaleString('id-ID');
+            document.getElementById('kpi-cancel').innerText = cancels.toLocaleString('id-ID');
+            document.getElementById('kpi-divert').innerText = diverts.toLocaleString('id-ID');
+            document.getElementById('kpi-rtb').innerText = rtbs.toLocaleString('id-ID');
+        }
+
+        // DYNAMIC ANALYSIS & PEAK DATE GENERATOR
+        function updatePeakDateAndAnalysis() {
+            const peakDisplay = document.getElementById('peak-date-display');
+            const peakCount = document.getElementById('peak-date-count');
+            const peakRedaksi = document.getElementById('peak-date-redaksi');
+            const peakBreakdown = document.getElementById('peak-date-breakdown');
+
+            if (filteredData.length === 0) {
+                peakDisplay.innerText = "Tidak Ada Data";
+                peakCount.innerText = "0 Kejadian";
+                peakRedaksi.innerText = "Tidak ada data irregularity yang cocok dengan filter yang dipilih saat ini.";
+                peakBreakdown.innerHTML = '';
+                return;
+            }
+
+            // Grouping by Date
+            const dateMap = {};
+            filteredData.forEach(item => {
+                if (!dateMap[item.date]) {
+                    dateMap[item.date] = { total: 0, DELAY: 0, CANCEL: 0, DIVERT: 0, RTB: 0, airports: {} };
+                }
+                dateMap[item.date].total++;
+                dateMap[item.date][item.type]++;
+                dateMap[item.date].airports[item.airport] = (dateMap[item.date].airports[item.airport] || 0) + 1;
+            });
+
+            // Find max date
+            let peakDate = null;
+            let maxTotal = -1;
+
+            Object.keys(dateMap).forEach(d => {
+                if (dateMap[d].total > maxTotal) {
+                    maxTotal = dateMap[d].total;
+                    peakDate = d;
+                }
+            });
+
+            if (!peakDate) return;
+
+            const peakData = dateMap[peakDate];
+            const formattedPeakDate = formatDateIndonesia(peakDate);
+            const peakPercentage = ((maxTotal / filteredData.length) * 100).toFixed(1);
+
+            // Find top affected airport on peak date
+            const sortedPeakAirports = Object.entries(peakData.airports).sort((a, b) => b[1] - a[1]);
+            const topPeakAirport = sortedPeakAirports[0] ? sortedPeakAirports[0][0] : 'Seluruh Bandara';
+            const topPeakAirportCount = sortedPeakAirports[0] ? sortedPeakAirports[0][1] : 0;
+
+            // Find primary irregularity category on peak date
+            const typeCounts = [
+                { name: 'Delay', val: peakData.DELAY, color: 'text-amber-400' },
+                { name: 'Cancel', val: peakData.CANCEL, color: 'text-red-400' },
+                { name: 'Divert', val: peakData.DIVERT, color: 'text-purple-400' },
+                { name: 'RTB', val: peakData.RTB, color: 'text-sky-400' }
+            ].sort((a, b) => b.val - a.val);
+
+            const dominantType = typeCounts[0];
+
+            peakDisplay.innerText = formattedPeakDate;
+            peakCount.innerText = `${maxTotal} Kejadian (${peakPercentage}% dari filter saat ini)`;
+
+            // Editorial Redaksi Peak Date
+            peakRedaksi.innerHTML = `
+                Puncak frekuensi gangguan operasional penerbangan tertinggi terjadi pada tanggal 
+                <strong class="text-white font-semibold">${formattedPeakDate}</strong> dengan total <strong class="text-rose-400 font-bold">${maxTotal} kejadian</strong>. 
+                Kejadian pada hari ini didominasi oleh ketidaklancaran jenis <strong class="text-white font-semibold">${dominantType.name}</strong> (${dominantType.val} kejadian). 
+                Stasiun / Bandara yang mencatatkan insiden terbanyak pada tanggal ini adalah <strong class="text-blue-300 font-semibold">${topPeakAirport}</strong> dengan <strong class="text-white">${topPeakAirportCount} kasus</strong>. 
+                Disarankan untuk mengevaluasi kronologi operasional dan kendala cuaca/teknis pada tanggal tersebut.
+            `;
+
+            // Dynamic Breakdown Badges
+            peakBreakdown.innerHTML = `
+                <div class="text-[11px] font-mono text-slate-400 mb-1 block w-full text-left lg:text-right">Rincian Tanggal Puncak:</div>
+                <div class="flex flex-wrap gap-1.5 justify-start lg:justify-end">
+                    <span class="px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono text-[11px]">
+                        <strong>${peakData.DELAY}</strong> Delay
+                    </span>
+                    <span class="px-2.5 py-1 rounded-md bg-red-500/10 border border-red-500/30 text-red-300 font-mono text-[11px]">
+                        <strong>${peakData.CANCEL}</strong> Cancel
+                    </span>
+                    <span class="px-2.5 py-1 rounded-md bg-purple-500/10 border border-purple-500/30 text-purple-300 font-mono text-[11px]">
+                        <strong>${peakData.DIVERT}</strong> Divert
+                    </span>
+                    <span class="px-2.5 py-1 rounded-md bg-sky-500/10 border border-sky-500/30 text-sky-300 font-mono text-[11px]">
+                        <strong>${peakData.RTB}</strong> RTB
+                    </span>
+                </div>
+            `;
+
+            // Update Narrative for Charts
+            updateAllChartRedaksis(dateMap, peakDate, maxTotal);
+        }
+
+        function updateAllChartRedaksis(dateMap, peakDate, maxTotal) {
+            // 1. Trend Chart Narrative
+            const activeDays = Object.keys(dateMap).length;
+            const avgDaily = activeDays > 0 ? (filteredData.length / activeDays).toFixed(1) : 0;
+            const formattedPeakDate = formatDateIndonesia(peakDate);
+
+            document.getElementById('trend-redaksi').innerHTML = `
+                Grafik menunjukkan fluktuasi riil harian dari seluruh kategori insiden. Rata-rata kejadian per hari tercatat sebanyak 
+                <strong class="text-blue-300">${avgDaily} kejadian/hari</strong> dari total <strong class="text-white">${activeDays} hari operasional</strong> yang teridentifikasi. 
+                Lonjakan paling signifikan tercatat pada <strong class="text-rose-400">${formattedPeakDate}</strong> (${maxTotal} kejadian). Tren ini mengindikasikan perlunya kesiapan mitigasi pada hari-hari dengan kepadatan tinggi.
+            `;
+
+            // 2. Multi-Airport Line Narrative
+            const aptCounts = {};
+            filteredData.forEach(item => aptCounts[item.airport] = (aptCounts[item.airport] || 0) + 1);
+            const topAirportsList = Object.keys(aptCounts).sort((a,b) => aptCounts[b] - aptCounts[a]);
+            const a1 = topAirportsList[0] || '-';
+            const a2 = topAirportsList[1] || '-';
+
+            document.getElementById('multi-airport-redaksi').innerHTML = `
+                Perbandingan pergerakan tren harian mengidentifikasi bahwa Bandara <strong class="text-emerald-300">${a1}</strong> (${aptCounts[a1] || 0} total gangguan) 
+                dan <strong class="text-emerald-300">${a2}</strong> (${aptCounts[a2] || 0} total gangguan) memiliki variabilitas dan frekuensi grafik tertinggi dibanding stasiun lainnya. 
+                Pola tren di stasiun-stasiun utama ini sangat menentukan fluktuasi total kecenderungan gangguan secara nasional.
+            `;
+
+            // 3. Airport Volume Narrative
+            const totalEvents = filteredData.length;
+            const a1Percent = totalEvents > 0 ? (((aptCounts[a1] || 0) / totalEvents) * 100).toFixed(1) : 0;
+            const top3Sum = topAirportsList.slice(0, 3).reduce((sum, apt) => sum + (aptCounts[apt] || 0), 0);
+            const top3Percent = totalEvents > 0 ? ((top3Sum / totalEvents) * 100).toFixed(1) : 0;
+
+            document.getElementById('airport-volume-redaksi').innerHTML = `
+                Bandara <strong class="text-amber-300">${a1}</strong> menduduki peringkat teratas lokasi dampak gangguan dengan menyumbang <strong class="text-white">${aptCounts[a1] || 0} insiden</strong> (${a1Percent}% dari total data). 
+                Secara kumulatif, 3 bandara teratas (<strong class="text-slate-200">${topAirportsList.slice(0,3).join(', ')}</strong>) berkontribusi sebesar <strong class="text-amber-400">${top3Percent}%</strong> dari keseluruhan gangguan operasional.
+            `;
+
+            // 4. Composition Narrative
+            const typeCounts = { DELAY: 0, CANCEL: 0, DIVERT: 0, RTB: 0 };
+            filteredData.forEach(i => typeCounts[i.type]++);
+            const sortedTypes = Object.entries(typeCounts).sort((a,b) => b[1] - a[1]);
+            const t1 = sortedTypes[0];
+            const t2 = sortedTypes[1];
+            const t1P = totalEvents > 0 ? ((t1[1] / totalEvents) * 100).toFixed(1) : 0;
+
+            document.getElementById('composition-redaksi').innerHTML = `
+                Komposisi ketidakberangkatan/gangguan secara riil didominasi oleh jenis <strong class="text-purple-300">${t1[0]}</strong> yaitu sebesar <strong class="text-white">${t1P}%</strong> (${t1[1]} kasus), 
+                kemudian diikuti oleh <strong class="text-slate-200">${t2[0]}</strong> (${t2[1]} kasus). Tingginya proporsi ${t1[0]} menunjukkan fokus utama penanganan perlu diarahkan pada efisiensi ground handling dan penyediaan kompensasi penumpang.
+            `;
+
+            // 5. Airport Donut Narrative
+            const top5Sum = topAirportsList.slice(0, 5).reduce((sum, apt) => sum + (aptCounts[apt] || 0), 0);
+            const top5P = totalEvents > 0 ? ((top5Sum / totalEvents) * 100).toFixed(1) : 0;
+
+            document.getElementById('airport-donut-redaksi').innerHTML = `
+                Distribusi gangguan terpusat di 5 bandara utama yang menguasai <strong class="text-sky-300">${top5P}%</strong> dari total keseluruhan insiden. 
+                Konsentrasi insiden di area hub menandakan bahwa kendala operasional sangat dipengaruhi oleh kepadatan lalu lintas penerbangan dan ketersediaan slot di bandara utama.
+            `;
+        }
+
+        function updateCharts() {
+            renderCompositionChart();
+            renderTrendChart();
+            renderAirportChart();
+            renderMultiAirportLineChart();
+            renderAirportDonutChart();
+        }
+
+        function renderCompositionChart() {
+            const ctx = document.getElementById('compositionChart').getContext('2d');
+            const counts = { DELAY: 0, CANCEL: 0, DIVERT: 0, RTB: 0 };
+            filteredData.forEach(item => counts[item.type]++);
+            
+            const data = [counts.DELAY, counts.CANCEL, counts.DIVERT, counts.RTB];
+            const labels = ['Delay', 'Cancel', 'Divert', 'RTB'];
+            const bgColors = [chartColors.DELAY, chartColors.CANCEL, chartColors.DIVERT, chartColors.RTB];
+
+            if (compositionChartInstance) compositionChartInstance.destroy();
+
+            compositionChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                plugins: [ChartDataLabels],
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: bgColors,
+                        borderWidth: 3,
+                        borderColor: '#1E293B',
+                        hoverOffset: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: { padding: 10 },
+                    plugins: {
+                        legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, boxWidth: 8, color: '#CBD5E1' } },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleColor: '#F8FAFC',
+                            bodyColor: '#CBD5E1',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            padding: 10,
+                            cornerRadius: 8,
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) label += ': ';
+                                    if (context.parsed !== null) {
+                                        let total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        let percentage = total > 0 ? ((context.parsed / total) * 100).toFixed(1) + '%' : '0%';
+                                        label += context.parsed.toLocaleString('id-ID') + ' (' + percentage + ')';
+                                    }
+                                    return label;
+                                }
+                            }
+                        },
+                        datalabels: {
+                            color: '#0B1121',
+                            font: { family: "'Inter'", weight: 'bold', size: 11 },
+                            formatter: (value, ctx) => {
+                                let sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                if (value === 0 || sum === 0) return null;
+                                let percentage = (value * 100 / sum);
+                                if (percentage < 5) return null; 
+                                return percentage.toFixed(0) + "%";
+                            }
+                        }
+                    },
+                    cutout: '68%'
+                }
+            });
+        }
+
+        function renderTrendChart() {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            const dateMap = {};
+            filteredData.forEach(item => {
+                if(!dateMap[item.date]) dateMap[item.date] = { DELAY: 0, CANCEL: 0, DIVERT: 0, RTB: 0 };
+                dateMap[item.date][item.type]++;
+            });
+
+            const sortedDates = Object.keys(dateMap).sort();
+            const datasets = [
+                { label: 'Delay', data: [], backgroundColor: chartColors.DELAY },
+                { label: 'Cancel', data: [], backgroundColor: chartColors.CANCEL },
+                { label: 'Divert', data: [], backgroundColor: chartColors.DIVERT },
+                { label: 'RTB', data: [], backgroundColor: chartColors.RTB }
+            ];
+
+            sortedDates.forEach(date => {
+                datasets[0].data.push(dateMap[date].DELAY);
+                datasets[1].data.push(dateMap[date].CANCEL);
+                datasets[2].data.push(dateMap[date].DIVERT);
+                datasets[3].data.push(dateMap[date].RTB);
+            });
+
+            datasets.forEach(ds => {
+                ds.borderRadius = { topLeft: 6, topRight: 6 };
+                ds.borderSkipped = false;
+                ds.barPercentage = 0.6;
+            });
+
+            if (trendChartInstance) trendChartInstance.destroy();
+
+            trendChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: sortedDates, datasets: datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: true, grid: { display: false }, ticks: { color: '#94A3B8' } },
+                        y: { stacked: true, beginAtZero: true, grid: gridConfig, border: {display: false}, ticks: { color: '#94A3B8' } }
+                    },
+                    plugins: {
+                        legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8, color: '#CBD5E1' } }
+                    }
+                }
+            });
+        }
+
+        function renderAirportChart() {
+             const ctx = document.getElementById('airportChart').getContext('2d');
+             const aptMap = {};
+             filteredData.forEach(item => {
+                 if(!aptMap[item.airport]) aptMap[item.airport] = { total: 0, DELAY: 0, CANCEL: 0, DIVERT: 0, RTB: 0 };
+                 aptMap[item.airport].total++;
+                 aptMap[item.airport][item.type]++;
+             });
+
+             const sortedAirports = Object.keys(aptMap).sort((a, b) => aptMap[b].total - aptMap[a].total);
+             const topAirports = sortedAirports.slice(0, 20);
+
+             const datasets = [
+                 { label: 'Delay', data: [], backgroundColor: chartColors.DELAY },
+                 { label: 'Cancel', data: [], backgroundColor: chartColors.CANCEL },
+                 { label: 'Divert', data: [], backgroundColor: chartColors.DIVERT },
+                 { label: 'RTB', data: [], backgroundColor: chartColors.RTB }
+             ];
+
+             topAirports.forEach(apt => {
+                 datasets[0].data.push(aptMap[apt].DELAY);
+                 datasets[1].data.push(aptMap[apt].CANCEL);
+                 datasets[2].data.push(aptMap[apt].DIVERT);
+                 datasets[3].data.push(aptMap[apt].RTB);
+             });
+
+             datasets.forEach(ds => {
+                 ds.borderRadius = { topRight: 6, bottomRight: 6 };
+                 ds.borderSkipped = false;
+                 ds.barPercentage = 0.7;
+             });
+
+             if (airportChartInstance) airportChartInstance.destroy();
+
+             airportChartInstance = new Chart(ctx, {
+                 type: 'bar',
+                 data: { labels: topAirports, datasets: datasets },
+                 options: {
+                     responsive: true, maintainAspectRatio: false,
+                     indexAxis: 'y',
+                     scales: {
+                         x: { stacked: true, grid: gridConfig, border: {display: false}, ticks: { color: '#94A3B8' } },
+                         y: { stacked: true, grid: { display: false }, ticks: { color: '#CBD5E1', font: {family: 'monospace'} } }
+                     },
+                     plugins: {
+                         legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8, color: '#CBD5E1' } }
+                     }
+                 }
+             });
+        }
+
+        const neonColorPalette = [
+            '#38BDF8', '#F87171', '#A78BFA', '#4ADE80', '#FBBF24', 
+            '#FB923C', '#E879F9', '#818CF8', '#2DD4BF', '#F472B6'
+        ];
+
+        function renderMultiAirportLineChart() {
+            const ctx = document.getElementById('multiAirportLineChart').getContext('2d');
+            
+            const dateSet = new Set();
+            filteredData.forEach(item => dateSet.add(item.date));
+            const sortedDates = Array.from(dateSet).sort();
+            
+            const aptCounts = {};
+            filteredData.forEach(item => {
+                aptCounts[item.airport] = (aptCounts[item.airport] || 0) + 1;
+            });
+            const topAirports = Object.keys(aptCounts).sort((a,b) => aptCounts[b] - aptCounts[a]).slice(0, 10);
+            
+            const dataMap = {};
+            topAirports.forEach(apt => {
+                dataMap[apt] = {};
+                sortedDates.forEach(d => dataMap[apt][d] = 0);
+            });
+            
+            filteredData.forEach(item => {
+                if(dataMap[item.airport]) {
+                    dataMap[item.airport][item.date]++;
+                }
+            });
+            
+            const datasets = topAirports.map((apt, index) => {
+                const color = neonColorPalette[index % neonColorPalette.length];
+                const dataArray = sortedDates.map(d => dataMap[apt][d]);
+                
+                return {
+                    label: apt,
+                    data: dataArray,
+                    borderColor: color,
+                    backgroundColor: color,
+                    fill: false,
+                    tension: 0.4,
+                    borderWidth: 3,
+                    pointRadius: 0,
+                    pointHoverRadius: 6,
+                    pointHitRadius: 15,
+                    pointBackgroundColor: color,
+                    pointBorderColor: '#1E293B',
+                    pointBorderWidth: 2
+                };
+            });
+            
+            if (multiAirportLineChartInstance) multiAirportLineChartInstance.destroy();
+            
+            multiAirportLineChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { labels: sortedDates, datasets: datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { 
+                            position: 'bottom',
+                            labels: { boxWidth: 10, usePointStyle: true, padding: 12, font: {size: 11}, color: '#CBD5E1' }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            titleColor: '#F8FAFC',
+                            bodyColor: '#CBD5E1',
+                            padding: 10,
+                            usePointStyle: true
+                        }
+                    },
+                    scales: {
+                        x: { 
+                            grid: { display: false }, 
+                            ticks: { color: '#94A3B8', maxRotation: 45, autoSkip: true, maxTicksLimit: 15 } 
+                        },
+                        y: { 
+                            beginAtZero: true, 
+                            grid: gridConfig, 
+                            border: {display: false}, 
+                            ticks: { color: '#94A3B8', stepSize: 1 } 
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderAirportDonutChart() {
+            const ctx = document.getElementById('airportDonutChart').getContext('2d');
+            
+            const aptCounts = {};
+            filteredData.forEach(item => {
+                aptCounts[item.airport] = (aptCounts[item.airport] || 0) + 1;
+            });
+            
+            const sortedApts = Object.entries(aptCounts).sort((a,b) => b[1] - a[1]);
+            
+            const top5 = sortedApts.slice(0, 5);
+            const others = sortedApts.slice(5).reduce((sum, curr) => sum + curr[1], 0);
+            
+            const labels = top5.map(a => a[0]);
+            const data = top5.map(a => a[1]);
+            
+            if (others > 0) {
+                labels.push('Lainnya');
+                data.push(others);
+            }
+            
+            const bgColors = neonColorPalette.slice(0, labels.length);
+
+            if (airportDonutChartInstance) airportDonutChartInstance.destroy();
+
+            airportDonutChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                plugins: [ChartDataLabels],
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: bgColors,
+                        borderWidth: 3,
+                        borderColor: '#1E293B',
+                        hoverOffset: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: { padding: 10 },
+                    plugins: {
+                        legend: { position: 'bottom', labels: { padding: 12, usePointStyle: true, boxWidth: 8, color: '#CBD5E1', font: {size: 11} } },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleColor: '#F8FAFC',
+                            bodyColor: '#CBD5E1',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            padding: 10,
+                            cornerRadius: 8,
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) label += ': ';
+                                    if (context.parsed !== null) {
+                                        let total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        let percentage = total > 0 ? ((context.parsed / total) * 100).toFixed(1) + '%' : '0%';
+                                        label += context.parsed.toLocaleString('id-ID') + ' (' + percentage + ')';
+                                    }
+                                    return label;
+                                }
+                            }
+                        },
+                        datalabels: {
+                            color: '#F8FAFC',
+                            font: { family: "'Inter'", weight: 'bold', size: 11 },
+                            textShadowColor: 'rgba(0,0,0,0.5)',
+                            textShadowBlur: 4,
+                            formatter: (value, ctx) => {
+                                let sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                if (value === 0 || sum === 0) return null;
+                                let percentage = (value * 100 / sum);
+                                if (percentage < 4) return null;
+                                return percentage.toFixed(0) + "%";
+                            }
+                        }
+                    },
+                    cutout: '60%'
+                }
+            });
+        }
+
+        function exportToPDF() {
+            if (filteredData.length === 0) {
+                alert("Tidak ada data untuk diekspor.");
+                return;
+            }
+            
+            const btn = document.getElementById('export-pdf-btn');
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-rose-400"></i><span>Memproses PDF...</span>';
+            btn.disabled = true;
+
+            const element = document.getElementById('dashboard-content');
+
+            const canvasOptions = {
+                scale: 1.5,
+                useCORS: true,
+                allowTaint: true,
+                logging: false,
+                backgroundColor: "#0B1120",
+                onclone: (clonedDoc) => {
+                    const clonedElement = clonedDoc.getElementById('dashboard-content');
+                    if (!clonedElement) return;
+
+                    clonedElement.style.padding = '20px';
+                    clonedElement.style.backgroundColor = '#0B1120';
+                    clonedElement.style.color = '#F8FAFC';
+                    
+                    const cards = clonedDoc.querySelectorAll('.airport-card');
+                    cards.forEach(card => {
+                        card.style.backdropFilter = 'none';
+                        card.style.webkitBackdropFilter = 'none';
+                        card.style.backgroundColor = '#0F172A';
+                        card.style.boxShadow = 'none';
+                        card.style.border = '1px solid #334155';
+                        card.style.transition = 'none';
+                    });
+
+                    const tableContainer = clonedDoc.querySelector('.table-container');
+                    if (tableContainer) {
+                        tableContainer.style.overflow = 'visible';
+                        tableContainer.style.maxHeight = 'none';
+                    }
+                }
+            };
+
+            html2canvas(element, canvasOptions).then(renderedCanvas => {
+                const imgData = renderedCanvas.toDataURL('image/jpeg', 0.95);
+                const jsPDFClass = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : window.jsPDF;
+
+                if (jsPDFClass) {
+                    const pdf = new jsPDFClass({
+                        orientation: 'landscape',
+                        unit: 'mm',
+                        format: 'a3'
+                    });
+
+                    const imgProps = pdf.getImageProperties(imgData);
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                    const pageHeight = pdf.internal.pageSize.getHeight();
+
+                    if (pdfHeight <= pageHeight) {
+                        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+                    } else {
+                        let heightLeft = pdfHeight;
+                        let position = 0;
+
+                        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+                        heightLeft -= pageHeight;
+
+                        while (heightLeft > 0) {
+                            position = heightLeft - pdfHeight;
+                            pdf.addPage();
+                            pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+                            heightLeft -= pageHeight;
+                        }
+                    }
+
+                    pdf.save(`Dashboard_Irregularity_${new Date().toISOString().slice(0, 10)}.pdf`);
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                } else {
+                    const img = new Image();
+                    img.src = imgData;
+                    img.onload = () => {
+                        const opt = {
+                            margin: 0,
+                            filename: `Dashboard_Irregularity_${new Date().toISOString().slice(0,10)}.pdf`,
+                            image: { type: 'jpeg', quality: 0.95 },
+                            html2canvas: { scale: 1 },
+                            jsPDF: { unit: 'mm', format: 'a3', orientation: 'landscape' }
+                        };
+                        html2pdf().from(img).set(opt).save().then(() => {
+                            btn.innerHTML = originalHtml;
+                            btn.disabled = false;
+                        });
+                    };
+                }
+            }).catch(err => {
+                console.error("PDF Export Error:", err);
+                alert("Gagal membuat PDF: " + (err.message || "Terjadi kesalahan saat merender file."));
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            });
+        }
+
+        function updateTable() {
+            const tbody = document.getElementById('data-table-body');
+            const countLabel = document.getElementById('table-count-label');
+            tbody.innerHTML = '';
+
+            const displayData = filteredData.slice(0, 50);
+            countLabel.innerText = `Menampilkan ${displayData.length} dari ${filteredData.length} data`;
+
+            if (displayData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-slate-500 font-mono text-xs">TIDAK ADA DATA UNTUK FILTER SEMENTARA</td></tr>';
+                return;
+            }
+
+            displayData.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-white/5 transition-colors";
+                
+                let typeColorClass = 'bg-slate-800 text-slate-300 border-slate-600';
+                let iconClass = 'fa-solid fa-circle-info';
+
+                if(item.type === 'DELAY') { typeColorClass = 'bg-amber-500/10 text-amber-400 border-amber-500/30'; iconClass = 'fa-solid fa-clock'; }
+                if(item.type === 'CANCEL') { typeColorClass = 'bg-red-500/10 text-red-400 border-red-500/30'; iconClass = 'fa-solid fa-ban'; }
+                if(item.type === 'DIVERT') { typeColorClass = 'bg-purple-500/10 text-purple-400 border-purple-500/30'; iconClass = 'fa-solid fa-route'; }
+                if(item.type === 'RTB') { typeColorClass = 'bg-sky-500/10 text-sky-400 border-sky-500/30'; iconClass = 'fa-solid fa-rotate-left'; }
+
+                tr.innerHTML = `
+                    <td class="px-5 py-3 whitespace-nowrap font-mono text-slate-400">${item.date}</td>
+                    <td class="px-5 py-3 whitespace-nowrap font-bold text-slate-200">${item.airport}</td>
+                    <td class="px-5 py-3 whitespace-nowrap font-mono text-blue-300">${item.flightNo}</td>
+                    <td class="px-5 py-3 whitespace-nowrap">
+                        <span class="px-2.5 py-1 inline-flex items-center gap-1.5 text-[10px] font-bold rounded border ${typeColorClass} tracking-wider">
+                            <i class="${iconClass}"></i> ${item.type}
+                        </span>
+                    </td>
+                    <td class="px-5 py-3 text-slate-300 truncate max-w-xs font-sans text-xs" title="${item.remark}">${item.remark}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+    </script>
+</body>
+</html>
