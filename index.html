@@ -50,7 +50,13 @@
             transform: translateY(-2px);
         }
 
-        /* KPI card top accent borders - Modernized with glow gradients */
+        /* High-Definition Crisp Canvas Rendering */
+        canvas {
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+        }
+
+        /* KPI card top accent borders */
         .kpi-total { border-top: 4px solid #3B82F6; background: linear-gradient(180deg, rgba(59,130,246,0.1) 0%, rgba(15,23,42,0) 100%), rgba(15, 23, 42, 0.55); }
         .kpi-delay { border-top: 4px solid #F59E0B; background: linear-gradient(180deg, rgba(245,158,11,0.08) 0%, rgba(15,23,42,0) 100%), rgba(15, 23, 42, 0.55); }
         .kpi-cancel { border-top: 4px solid #EF4444; background: linear-gradient(180deg, rgba(239,68,68,0.08) 0%, rgba(15,23,42,0) 100%), rgba(15, 23, 42, 0.55); }
@@ -129,6 +135,11 @@
                 </div>
                 
                 <div class="flex items-center gap-3">
+                    <!-- Export Image Button -->
+                    <button id="export-img-btn" onclick="exportToImage()" class="hidden sm:flex items-center gap-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all shadow-sm">
+                        <i class="fa-solid fa-image text-purple-400"></i>
+                        <span>Download Gambar</span>
+                    </button>
                     <!-- Export PDF Button -->
                     <button id="export-pdf-btn" onclick="exportToPDF()" class="hidden sm:flex items-center gap-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all shadow-sm">
                         <i class="fa-solid fa-file-pdf text-rose-400"></i>
@@ -183,269 +194,283 @@
             <div id="dashboard-content" class="hidden space-y-6">
                 
                 <!-- Filters Control Panel -->
-                <div class="airport-card flex flex-col md:flex-row gap-4 items-center justify-between z-20 relative p-5">
-                    <div class="flex items-center justify-between w-full md:w-auto gap-4">
-                        <div class="flex items-center gap-3">
-                            <div class="bg-slate-800 p-2.5 rounded-xl border border-slate-700">
+                <div class="airport-card flex flex-col lg:flex-row gap-4 items-center justify-between z-20 relative p-5">
+                    <div class="flex flex-wrap lg:flex-nowrap items-center gap-4 w-full">
+                        <div class="flex items-center gap-3 w-full lg:w-auto">
+                            <div class="bg-slate-800 p-2.5 rounded-xl border border-slate-700 shrink-0">
                                 <i class="fa-solid fa-filter text-blue-400"></i>
                             </div>
-                            <div>
-                                <h2 class="font-bold text-slate-200 text-xs uppercase tracking-wider font-mono">Filter Data</h2>
-                                <p class="text-[11px] text-slate-400">Sesuaikan tampilan grafik & laporan</p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto flex-1 md:justify-end flex-wrap items-center">
-                        <div class="flex-1 min-w-[130px] w-full sm:w-auto">
-                            <label for="month-filter" class="block text-[11px] font-medium text-slate-400 mb-1">Periode Bulan</label>
-                            <select id="month-filter" class="w-full rounded-lg text-xs p-2.5 border font-medium">
-                                <option value="all">Semua Bulan</option>
-                            </select>
-                        </div>
-                        <div class="flex-1 min-w-[130px] w-full sm:w-auto">
-                            <label for="date-filter" class="block text-[11px] font-medium text-slate-400 mb-1">Tanggal Spesifik</label>
-                            <input type="date" id="date-filter" class="w-full rounded-lg text-xs p-2 border font-medium">
-                        </div>
-                        <div class="flex-1 min-w-[130px] w-full sm:w-auto">
-                            <label for="airport-filter" class="block text-[11px] font-medium text-slate-400 mb-1">Bandara / Stasiun</label>
-                            <select id="airport-filter" class="w-full rounded-lg text-xs p-2.5 border font-medium">
-                                <option value="all">Semua Bandara</option>
-                            </select>
-                        </div>
-                        <div class="flex-1 min-w-[130px] w-full sm:w-auto">
-                            <label for="category-filter" class="block text-[11px] font-medium text-slate-400 mb-1">Jenis Irregularity</label>
-                            <select id="category-filter" class="w-full rounded-lg text-xs p-2.5 border font-medium">
-                                <option value="all">Semua Jenis</option>
-                                <option value="DELAY">DELAY</option>
-                                <option value="CANCEL">CANCEL</option>
-                                <option value="DIVERT">DIVERT</option>
-                                <option value="RTB">RTB</option>
-                            </select>
+                            <span class="text-sm font-bold tracking-wider text-slate-200 hidden md:block uppercase">Filter Data:</span>
                         </div>
                         
-                        <!-- Action Buttons -->
-                        <div class="flex items-center gap-2 w-full sm:w-auto pt-2 sm:pt-0 self-end">
-                            <button id="reset-filters" class="flex-1 sm:flex-none bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-xs font-semibold px-3.5 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
-                                <i class="fa-solid fa-rotate-right"></i> Reset
-                            </button>
-                            <button onclick="triggerFileInput()" class="flex-1 sm:flex-none bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 text-xs font-semibold px-3.5 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
-                                <i class="fa-solid fa-cloud-arrow-up text-blue-400"></i> Ganti Data
-                            </button>
+                        <div class="flex flex-wrap sm:flex-nowrap items-center gap-3 w-full lg:flex-1">
+                            <div class="relative flex-1 min-w-[140px]">
+                                <i class="fa-regular fa-calendar absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                <select id="month-filter" class="w-full bg-slate-800/80 border border-slate-700 text-slate-300 text-xs rounded-lg pl-8 pr-3 py-2.5 appearance-none focus:ring-2 focus:ring-blue-500/50 transition-all">
+                                    <option value="all">Semua Bulan</option>
+                                </select>
+                            </div>
+                            
+                            <div class="relative flex-1 min-w-[140px]">
+                                <input type="date" id="date-filter" class="w-full bg-slate-800/80 border border-slate-700 text-slate-300 text-xs rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500/50 transition-all cursor-pointer">
+                            </div>
+                            
+                            <div class="relative flex-1 min-w-[140px]">
+                                <i class="fa-solid fa-location-dot absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                <select id="airport-filter" class="w-full bg-slate-800/80 border border-slate-700 text-slate-300 text-xs rounded-lg pl-8 pr-3 py-2.5 appearance-none focus:ring-2 focus:ring-blue-500/50 transition-all">
+                                    <option value="all">Semua Bandara</option>
+                                </select>
+                            </div>
+                            
+                            <div class="relative flex-1 min-w-[140px]">
+                                <i class="fa-solid fa-layer-group absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                <select id="category-filter" class="w-full bg-slate-800/80 border border-slate-700 text-slate-300 text-xs rounded-lg pl-8 pr-3 py-2.5 appearance-none focus:ring-2 focus:ring-blue-500/50 transition-all">
+                                    <option value="all">Semua Kategori</option>
+                                    <option value="DELAY">Delay</option>
+                                    <option value="CANCEL">Cancel</option>
+                                    <option value="DIVERT">Divert</option>
+                                    <option value="RTB">RTB</option>
+                                </select>
+                            </div>
                         </div>
+
+                        <button id="reset-filters" class="w-full lg:w-auto bg-slate-700/50 hover:bg-slate-700 border border-slate-600 text-slate-300 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-2 shrink-0">
+                            <i class="fa-solid fa-rotate-right"></i>
+                            <span class="lg:hidden xl:inline">Reset</span>
+                        </button>
                     </div>
                 </div>
 
-                <!-- KPI Summary Cards -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                    <!-- Total Kejadian -->
-                    <div class="airport-card kpi-total flex items-center justify-between">
-                        <div>
-                            <p class="text-[11px] font-semibold text-blue-400 uppercase tracking-wider mb-1">Total Kejadian</p>
-                            <p class="text-3xl font-extrabold text-white tracking-tight" id="kpi-total">0</p>
+                <!-- KPI Cards -->
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div class="airport-card kpi-total flex flex-col justify-center relative overflow-hidden group">
+                        <div class="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <i class="fa-solid fa-chart-pie text-7xl text-blue-500"></i>
                         </div>
-                        <div class="p-3 bg-blue-500/20 rounded-xl border border-blue-500/30">
-                            <i class="fa-solid fa-triangle-exclamation text-blue-400 text-xl"></i>
-                        </div>
-                    </div>
-                    <!-- Total Delay -->
-                    <div class="airport-card kpi-delay flex items-center justify-between group">
-                        <div>
-                            <p class="text-[11px] font-semibold text-amber-400 uppercase tracking-wider mb-1">Total Delay</p>
-                            <p class="text-3xl font-extrabold text-slate-100 group-hover:text-amber-400 transition-colors" id="kpi-delay">0</p>
-                        </div>
-                        <div class="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20">
-                            <i class="fa-solid fa-clock text-amber-400 text-xl"></i>
-                        </div>
-                    </div>
-                    <!-- Total Cancel -->
-                    <div class="airport-card kpi-cancel flex items-center justify-between group">
-                        <div>
-                            <p class="text-[11px] font-semibold text-red-400 uppercase tracking-wider mb-1">Total Cancel</p>
-                            <p class="text-3xl font-extrabold text-slate-100 group-hover:text-red-400 transition-colors" id="kpi-cancel">0</p>
-                        </div>
-                        <div class="p-3 bg-red-500/10 rounded-xl border border-red-500/20">
-                            <i class="fa-solid fa-ban text-red-400 text-xl"></i>
-                        </div>
-                    </div>
-                    <!-- Total Divert -->
-                    <div class="airport-card kpi-divert flex items-center justify-between group">
-                        <div>
-                            <p class="text-[11px] font-semibold text-purple-400 uppercase tracking-wider mb-1">Total Divert</p>
-                            <p class="text-3xl font-extrabold text-slate-100 group-hover:text-purple-400 transition-colors" id="kpi-divert">0</p>
-                        </div>
-                        <div class="p-3 bg-purple-500/10 rounded-xl border border-purple-500/20">
-                            <i class="fa-solid fa-route text-purple-400 text-xl"></i>
-                        </div>
-                    </div>
-                    <!-- Total RTB -->
-                    <div class="airport-card kpi-rtb flex items-center justify-between group">
-                        <div>
-                            <p class="text-[11px] font-semibold text-sky-400 uppercase tracking-wider mb-1">Total RTB</p>
-                            <p class="text-3xl font-extrabold text-slate-100 group-hover:text-sky-400 transition-colors" id="kpi-rtb">0</p>
-                        </div>
-                        <div class="p-3 bg-sky-500/10 rounded-xl border border-sky-500/20">
-                            <i class="fa-solid fa-rotate-left text-sky-400 text-xl"></i>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TOP TREND PEAK DATE & NARRATIVE CARD (NEW) -->
-                <div class="airport-card border-l-4 border-l-rose-500 bg-gradient-to-r from-rose-950/20 via-slate-900/60 to-slate-900/40">
-                    <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-                        <div class="space-y-2 flex-1">
-                            <div class="flex items-center gap-2 text-xs font-bold text-rose-400 uppercase tracking-wider">
-                                <i class="fa-solid fa-fire-flame-curved text-rose-500 text-sm animate-bounce"></i>
-                                <span>Puncak Tanggal Gangguan Terbanyak (Top Peak Date)</span>
-                            </div>
-                            <div class="flex items-baseline gap-3 flex-wrap">
-                                <h3 class="text-2xl font-black text-white font-mono tracking-tight" id="peak-date-display">-</h3>
-                                <span class="bg-rose-500/20 border border-rose-500/40 text-rose-300 font-bold px-3 py-1 rounded-full text-xs" id="peak-date-count">0 Kejadian</span>
-                            </div>
-                            <!-- Editorial / Dynamic Narrative Text for Peak Date -->
-                            <div class="pt-2 border-t border-slate-800/80">
-                                <p class="text-xs text-slate-300 leading-relaxed font-sans" id="peak-date-redaksi">
-                                    Memuat analisa tanggal puncak gangguan...
-                                </p>
-                            </div>
-                        </div>
-
-                        <!-- Mini Breakdown Badges on Peak Date -->
-                        <div class="flex flex-wrap gap-2 lg:flex-col lg:items-end justify-start min-w-[200px]" id="peak-date-breakdown">
-                            <!-- Populated dynamically -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Charts Row 1: Full Width Trend Chart -->
-                <div class="grid grid-cols-1 gap-6 mb-6">
-                    <!-- Chronological Trend Chart -->
-                    <div class="airport-card flex flex-col justify-between">
-                        <div>
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="flex items-center gap-2">
-                                    <i class="fa-solid fa-chart-line text-blue-400"></i>
-                                    <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Trend Harian Irregularity Penerbangan</h3>
-                                </div>
-                                <span class="text-[11px] text-slate-400 font-mono" id="trend-subtitle">Semua Data</span>
-                            </div>
-                            <div class="relative h-[340px] w-full">
-                                <canvas id="trendChart"></canvas>
-                            </div>
-                        </div>
-                        <!-- Redaksi Analisa Box -->
-                        <div class="mt-4 p-3.5 bg-slate-800/40 border border-slate-700/60 rounded-xl text-xs text-slate-300 flex items-start gap-3">
-                            <div class="bg-blue-500/10 p-2 rounded-lg text-blue-400 mt-0.5 border border-blue-500/20 flex-shrink-0">
-                                <i class="fa-solid fa-chart-line"></i>
-                            </div>
-                            <div class="space-y-1">
-                                <span class="font-semibold text-slate-200 block text-[11px] uppercase tracking-wider">Redaksi Analisa Tren Harian:</span>
-                                <p id="trend-redaksi" class="leading-relaxed text-slate-300">-</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Charts Row 2: Full Width Multi-Airport Line Chart -->
-                <div class="grid grid-cols-1 gap-6 mb-6">
-                    <!-- Multi-Airport Line Comparison Chart -->
-                    <div class="airport-card flex flex-col justify-between">
-                        <div>
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="flex items-center gap-2">
-                                    <i class="fa-solid fa-diagram-project text-emerald-400"></i>
-                                    <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Perbandingan Trend Dampak Antar Bandara</h3>
-                                </div>
-                            </div>
-                            <div class="relative h-[380px] w-full">
-                                <canvas id="multiAirportLineChart"></canvas>
-                            </div>
-                        </div>
-                        <!-- Redaksi Analisa Box -->
-                        <div class="mt-4 p-3.5 bg-slate-800/40 border border-slate-700/60 rounded-xl text-xs text-slate-300 flex items-start gap-3">
-                            <div class="bg-emerald-500/10 p-2 rounded-lg text-emerald-400 mt-0.5 border border-emerald-500/20 flex-shrink-0">
-                                <i class="fa-solid fa-diagram-project"></i>
-                            </div>
-                            <div class="space-y-1">
-                                <span class="font-semibold text-slate-200 block text-[11px] uppercase tracking-wider">Redaksi Analisa Tren Antar Bandara:</span>
-                                <p id="multi-airport-redaksi" class="leading-relaxed text-slate-300">-</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Charts Row 3: Full Width Airport Volume -->
-                <div class="grid grid-cols-1 gap-6 mb-6">
-                    <!-- Irregularity per Airport Chart -->
-                    <div class="airport-card flex flex-col justify-between">
-                        <div>
-                            <div class="flex items-center gap-2 mb-4">
-                                <i class="fa-solid fa-plane-arrival text-amber-400"></i>
-                                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Total Irregularity per Bandara (Top 20)</h3>
-                            </div>
-                            <div class="relative h-[400px] w-full">
-                                <canvas id="airportChart"></canvas>
-                            </div>
-                        </div>
-                        <!-- Redaksi Analisa Box -->
-                        <div class="mt-4 p-3.5 bg-slate-800/40 border border-slate-700/60 rounded-xl text-xs text-slate-300 flex items-start gap-3">
-                            <div class="bg-amber-500/10 p-2 rounded-lg text-amber-400 mt-0.5 border border-amber-500/20 flex-shrink-0">
-                                <i class="fa-solid fa-ranking-star"></i>
-                            </div>
-                            <div class="space-y-1">
-                                <span class="font-semibold text-slate-200 block text-[11px] uppercase tracking-wider">Redaksi Analisa Akumulasi Bandara:</span>
-                                <p id="airport-volume-redaksi" class="leading-relaxed text-slate-300">-</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Charts Row 4: Donut Charts (Composition & Airport Dist) -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <!-- Event Composition Chart -->
-                    <div class="airport-card flex flex-col justify-between">
-                        <div>
-                            <div class="flex items-center gap-2 mb-4">
-                                <i class="fa-solid fa-chart-pie text-purple-400"></i>
-                                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Komposisi Jenis Irregularity</h3>
-                            </div>
-                            <div class="relative flex-1 w-full flex justify-center pb-2 min-h-[280px]">
-                                <canvas id="compositionChart"></canvas>
-                            </div>
-                        </div>
-                        <!-- Redaksi Analisa Box -->
-                        <div class="mt-4 p-3.5 bg-slate-800/40 border border-slate-700/60 rounded-xl text-xs text-slate-300 flex items-start gap-3">
-                            <div class="bg-purple-500/10 p-2 rounded-lg text-purple-400 mt-0.5 border border-purple-500/20 flex-shrink-0">
-                                <i class="fa-solid fa-chart-pie"></i>
-                            </div>
-                            <div class="space-y-1">
-                                <span class="font-semibold text-slate-200 block text-[11px] uppercase tracking-wider">Redaksi Komposisi Jenis Gangguan:</span>
-                                <p id="composition-redaksi" class="leading-relaxed text-slate-300">-</p>
-                            </div>
+                        <span class="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-1 z-10">Total Temuan</span>
+                        <div class="flex items-end gap-2 z-10">
+                            <span class="text-3xl font-black text-white tracking-tight" id="kpi-total">0</span>
                         </div>
                     </div>
                     
-                    <!-- Airport Percentage Donut Chart -->
-                    <div class="airport-card flex flex-col justify-between">
-                        <div>
-                            <div class="flex items-center gap-2 mb-4">
-                                <i class="fa-solid fa-earth-asia text-sky-400"></i>
-                                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Persentase Gangguan Bandara</h3>
-                            </div>
-                            <div class="relative flex-1 w-full flex justify-center pb-2 min-h-[280px]">
-                                <canvas id="airportDonutChart"></canvas>
-                            </div>
+                    <div class="airport-card kpi-delay flex flex-col justify-center relative overflow-hidden group">
+                        <div class="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <i class="fa-solid fa-clock text-7xl text-amber-500"></i>
                         </div>
-                        <!-- Redaksi Analisa Box -->
-                        <div class="mt-4 p-3.5 bg-slate-800/40 border border-slate-700/60 rounded-xl text-xs text-slate-300 flex items-start gap-3">
-                            <div class="bg-sky-500/10 p-2 rounded-lg text-sky-400 mt-0.5 border border-sky-500/20 flex-shrink-0">
-                                <i class="fa-solid fa-earth-asia"></i>
-                            </div>
-                            <div class="space-y-1">
-                                <span class="font-semibold text-slate-200 block text-[11px] uppercase tracking-wider">Redaksi Proporsi Bandara Terdampak:</span>
-                                <p id="airport-donut-redaksi" class="leading-relaxed text-slate-300">-</p>
-                            </div>
+                        <span class="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-1 z-10">Delay</span>
+                        <div class="flex items-end gap-2 z-10">
+                            <span class="text-3xl font-black text-amber-400 tracking-tight" id="kpi-delay">0</span>
                         </div>
+                    </div>
+
+                    <div class="airport-card kpi-cancel flex flex-col justify-center relative overflow-hidden group">
+                        <div class="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <i class="fa-solid fa-ban text-7xl text-red-500"></i>
+                        </div>
+                        <span class="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-1 z-10">Cancel</span>
+                        <div class="flex items-end gap-2 z-10">
+                            <span class="text-3xl font-black text-red-400 tracking-tight" id="kpi-cancel">0</span>
+                        </div>
+                    </div>
+
+                    <div class="airport-card kpi-divert flex flex-col justify-center relative overflow-hidden group">
+                        <div class="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <i class="fa-solid fa-route text-7xl text-purple-500"></i>
+                        </div>
+                        <span class="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-1 z-10">Divert</span>
+                        <div class="flex items-end gap-2 z-10">
+                            <span class="text-3xl font-black text-purple-400 tracking-tight" id="kpi-divert">0</span>
+                        </div>
+                    </div>
+
+                    <div class="airport-card kpi-rtb flex flex-col justify-center relative overflow-hidden group">
+                        <div class="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <i class="fa-solid fa-rotate-left text-7xl text-sky-500"></i>
+                        </div>
+                        <span class="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-1 z-10">Return to Base</span>
+                        <div class="flex items-end gap-2 z-10">
+                            <span class="text-3xl font-black text-sky-400 tracking-tight" id="kpi-rtb">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Peak Date Highlight Banner -->
+                <div class="airport-card border border-rose-500/30 bg-gradient-to-r from-rose-900/20 via-[#0F172A] to-[#0F172A] flex flex-col lg:flex-row items-center justify-between gap-6 overflow-hidden relative">
+                    <div class="absolute left-0 top-0 bottom-0 w-1 bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.5)]"></div>
+                    <div class="flex-1 flex flex-col lg:flex-row items-center lg:items-start gap-4 lg:gap-6 z-10">
+                        <div class="bg-rose-500/10 p-3 rounded-xl border border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.15)] flex-shrink-0">
+                            <i class="fa-solid fa-triangle-exclamation text-rose-400 text-2xl"></i>
+                        </div>
+                        <div class="text-center lg:text-left">
+                            <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider mb-1">Puncak Gangguan Operasional (Peak Date)</h3>
+                            <div class="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 mb-2">
+                                <span class="text-2xl lg:text-3xl font-black text-white tracking-tight" id="peak-date-display">-</span>
+                                <span class="px-3 py-1 bg-rose-500/20 border border-rose-500/30 rounded-lg text-rose-300 font-bold text-sm tracking-widest shadow-inner" id="peak-date-count">0 Kejadian</span>
+                            </div>
+                            <p class="text-xs text-slate-400 max-w-2xl leading-relaxed" id="peak-date-redaksi">Menunggu data...</p>
+                        </div>
+                    </div>
+                    <div class="w-full lg:w-auto flex-shrink-0" id="peak-date-breakdown">
+                        <!-- Breakdown badges will be injected here -->
+                    </div>
+                </div>
+                
+                <!-- Main Charts Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    <!-- Trend Chart (Spans 2 columns) -->
+                    <div class="airport-card lg:col-span-2 flex flex-col">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                                    <i class="fa-solid fa-chart-line text-blue-400"></i>
+                                    Tren Kejadian Harian
+                                </h3>
+                                <p class="text-[11px] text-slate-400 font-mono mt-1" id="trend-subtitle">Berdasarkan filter aktif</p>
+                            </div>
+                            <button onclick="downloadChart('trendChart', 'Tren_Kejadian')" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-1.5 rounded" title="Download Grafik">
+                                <i class="fa-solid fa-download"></i>
+                            </button>
+                        </div>
+                        <div class="relative h-[300px] w-full flex-1">
+                            <canvas id="trendChart"></canvas>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-slate-700/50">
+                            <p id="trend-redaksi" class="text-[11px] text-slate-400 leading-relaxed font-light">Menganalisis pola tren harian...</p>
+                        </div>
+                    </div>
+
+                    <!-- Composition Chart -->
+                    <div class="airport-card flex flex-col">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                                <i class="fa-solid fa-chart-pie text-purple-400"></i>
+                                Komposisi Gangguan
+                            </h3>
+                            <button onclick="downloadChart('compositionChart', 'Komposisi_Gangguan')" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-1.5 rounded" title="Download Grafik">
+                                <i class="fa-solid fa-download"></i>
+                            </button>
+                        </div>
+                        <div class="relative h-[280px] w-full flex-1">
+                            <canvas id="compositionChart"></canvas>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-slate-700/50">
+                            <p id="composition-redaksi" class="text-[11px] text-slate-400 leading-relaxed font-light">Menghitung rasio komposisi...</p>
+                        </div>
+                    </div>
+
+                    <!-- NEW: Grouped Bar Chart (Spans 3 columns - Side by Side Comparison of Cancel, Delay, Divert, RTB per Airport) -->
+                    <div class="airport-card lg:col-span-3 flex flex-col">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                                    <i class="fa-solid fa-chart-column text-amber-400"></i>
+                                    Perbandingan Rincian Gangguan Antar Bandara (Grouped Side-by-Side)
+                                </h3>
+                                <p class="text-[11px] text-slate-400 font-mono mt-1">Komparasi langsung nilai Cancel, Delay, Divert, dan RTB per stasiun bandara (Top 12 Bandara)</p>
+                            </div>
+                            <button onclick="downloadChart('groupedAirportChart', 'Perbandingan_Rincian_Gangguan_Bandara')" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-1.5 rounded" title="Download Grafik High-Res">
+                                <i class="fa-solid fa-download"></i>
+                            </button>
+                        </div>
+                        <div class="relative h-[380px] w-full flex-1">
+                            <canvas id="groupedAirportChart"></canvas>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-slate-700/50">
+                            <p id="grouped-airport-redaksi" class="text-[11px] text-slate-400 leading-relaxed font-light">Menganalisis perbandingan berdampingan antar kategori gangguan...</p>
+                        </div>
+                    </div>
+
+                    <!-- Multi Airport Line Chart (Spans 2 columns) -->
+                    <div class="airport-card lg:col-span-2 flex flex-col">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                                    <i class="fa-solid fa-chart-area text-emerald-400"></i>
+                                    Perbandingan Tren Antar Bandara (Top 10)
+                                </h3>
+                                <p class="text-[11px] text-slate-400 font-mono mt-1">Distribusi harian per stasiun</p>
+                            </div>
+                            <button onclick="downloadChart('multiAirportLineChart', 'Perbandingan_Tren_Bandara')" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-1.5 rounded" title="Download Grafik">
+                                <i class="fa-solid fa-download"></i>
+                            </button>
+                        </div>
+                        <div class="relative h-[350px] w-full flex-1">
+                            <canvas id="multiAirportLineChart"></canvas>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-slate-700/50">
+                            <p id="multi-airport-redaksi" class="text-[11px] text-slate-400 leading-relaxed font-light">Menganalisis perbandingan stasiun...</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Airport Donut Chart -->
+                    <div class="airport-card flex flex-col">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                                <i class="fa-solid fa-map-location-dot text-sky-400"></i>
+                                Bandara Terdampak Utama
+                            </h3>
+                            <button onclick="downloadChart('airportDonutChart', 'Bandara_Terdampak_Utama')" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-1.5 rounded" title="Download Grafik">
+                                <i class="fa-solid fa-download"></i>
+                            </button>
+                        </div>
+                        <div class="relative h-[250px] w-full">
+                            <canvas id="airportDonutChart"></canvas>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-slate-700/50">
+                            <p id="airport-donut-redaksi" class="text-[11px] text-slate-400 leading-relaxed font-light">Menunggu data untuk Insight Distribusi Bandara Utama...</p>
+                        </div>
+                    </div>
+
+                    <!-- Top Airports Bar Chart (Full Width) -->
+                    <div class="airport-card lg:col-span-3 flex flex-col">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                                    <i class="fa-solid fa-plane-arrival text-amber-400"></i>
+                                    Volume Irregularity Kumulatif per Bandara (Top 20)
+                                </h3>
+                                <p class="text-[11px] text-slate-400 font-mono mt-1">Akumulasi kejadian berdasarkan lokasi stasiun</p>
+                            </div>
+                            <button onclick="downloadChart('airportChart', 'Volume_Irregularity_Bandara')" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-1.5 rounded" title="Download Grafik">
+                                <i class="fa-solid fa-download"></i>
+                            </button>
+                        </div>
+                        <div class="relative h-[450px] w-full flex-1">
+                            <canvas id="airportChart"></canvas>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-slate-700/50">
+                            <p id="airport-volume-redaksi" class="text-[11px] text-slate-400 leading-relaxed font-light">Mengidentifikasi titik konsentrasi gangguan...</p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Interactive Pivot Table -->
+                <div class="airport-card mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-hand-pointer text-blue-400 animate-pulse"></i>
+                            <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Rekapitulasi Interaktif (Klik Angka Untuk Rincian)</h3>
+                        </div>
+                        <span class="text-xs text-slate-400 font-mono">Tabel Pivot Multi-Dimensi</span>
+                    </div>
+                    <div class="table-container overflow-x-auto border border-slate-700/60 rounded-xl bg-[#0F172A]/50 shadow-inner">
+                        <table class="min-w-full divide-y divide-slate-700/80">
+                            <thead class="sticky top-0 z-10 bg-[#0F172A]">
+                                <tr>
+                                    <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-300">Lokasi / Bandara</th>
+                                    <th scope="col" class="px-5 py-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-amber-400">Delay</th>
+                                    <th scope="col" class="px-5 py-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-red-400">Cancel</th>
+                                    <th scope="col" class="px-5 py-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-purple-400">Divert</th>
+                                    <th scope="col" class="px-5 py-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-sky-400">RTB</th>
+                                    <th scope="col" class="px-5 py-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-white">Total Temuan</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pivot-table-body" class="divide-y divide-slate-800 text-xs text-slate-300">
+                                <!-- Dynamic Pivot Rows -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -480,6 +505,42 @@
         </div>
     </main>
 
+    <!-- Detail Modal (Pop-up) -->
+    <div id="detail-modal" class="fixed inset-0 z-[100] hidden flex items-center justify-center bg-[#0B1120]/80 backdrop-blur-sm p-4 transition-opacity">
+        <div class="bg-[#0F172A] border border-blue-500/40 rounded-2xl w-full max-w-5xl shadow-[0_0_50px_rgba(59,130,246,0.2)] flex flex-col max-h-[90vh] transform transition-transform scale-95" id="modal-content-box">
+            <div class="flex justify-between items-center p-5 border-b border-slate-700/80 bg-slate-800/40 rounded-t-2xl">
+                <div class="flex items-center gap-3">
+                    <div class="bg-blue-500/20 p-2.5 rounded-lg border border-blue-500/40 shadow-[0_0_10px_rgba(59,130,246,0.2)]">
+                        <i class="fa-solid fa-list-check text-blue-400 text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-100 tracking-wide" id="modal-title">Rincian Data Temuan</h3>
+                        <p class="text-xs text-slate-400 font-mono" id="modal-subtitle">Filter aktif</p>
+                    </div>
+                </div>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 p-2 rounded-lg transition-colors border border-slate-700 shadow-sm">
+                    <i class="fa-solid fa-xmark text-lg px-1"></i>
+                </button>
+            </div>
+            <div class="p-5 overflow-y-auto flex-1 table-container">
+                <table class="min-w-full divide-y divide-slate-700/80">
+                    <thead class="sticky top-0 z-10 bg-[#0F172A]">
+                        <tr>
+                            <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">Tanggal</th>
+                            <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">Bandara</th>
+                            <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">No. Penerbangan</th>
+                            <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">Jenis</th>
+                            <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">Keterangan</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modal-table-body" class="divide-y divide-slate-800 text-xs text-slate-300">
+                        <!-- Populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Global Data Variables
         let rawData = [];
@@ -489,12 +550,63 @@
         let trendChartInstance = null;
         let compositionChartInstance = null;
         let airportChartInstance = null;
+        let groupedAirportChartInstance = null; // New chart instance
         let multiAirportLineChartInstance = null;
         let airportDonutChartInstance = null;
 
+        // HIGH-RESOLUTION CRISP RENDERING (PREVENTS BLURRY CHARTS ON ALL DISPLAYS)
+        // Dynamically scale pixel ratio based on screen devicePixelRatio or default to min 2.5x
+        const customPixelRatio = Math.max(window.devicePixelRatio || 1, 2.5);
+        Chart.defaults.devicePixelRatio = customPixelRatio;
+
+        // Custom Plugin for Doughnut Leader Lines
+        const doughnutPointer = {
+            id: 'doughnutPointer',
+            afterDraw(chart) {
+                if (chart.config.type !== 'doughnut') return;
+                const ctx = chart.ctx;
+                chart.data.datasets.forEach((dataset, i) => {
+                    const meta = chart.getDatasetMeta(i);
+                    meta.data.forEach((element, index) => {
+                        const data = dataset.data[index];
+                        let sum = dataset.data.reduce((a, b) => a + b, 0);
+                        if (data === 0 || sum === 0) return;
+                        let percentage = (data * 100 / sum);
+                        if (percentage < 4) return;
+
+                        const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2;
+                        const r = element.outerRadius;
+                        
+                        const edgeX = element.x + Math.cos(midAngle) * r;
+                        const edgeY = element.y + Math.sin(midAngle) * r;
+                        
+                        const lineLength = 15;
+                        const targetX = element.x + Math.cos(midAngle) * (r + lineLength);
+                        const targetY = element.y + Math.sin(midAngle) * (r + lineLength);
+
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.moveTo(edgeX, edgeY);
+                        ctx.lineTo(targetX, targetY);
+                        ctx.strokeStyle = dataset.borderColor || '#64748b';
+                        ctx.lineWidth = 1.5;
+                        ctx.stroke();
+                        
+                        ctx.beginPath();
+                        ctx.arc(targetX, targetY, 2.5, 0, 2 * Math.PI);
+                        ctx.fillStyle = ctx.strokeStyle;
+                        ctx.fill();
+                        ctx.restore();
+                    });
+                });
+            }
+        };
+        Chart.register(doughnutPointer);
+
         // Global Chart styling defaults
         Chart.defaults.font.family = "'Inter', sans-serif";
-        Chart.defaults.color = '#94A3B8';
+        Chart.defaults.font.size = 12;
+        Chart.defaults.color = '#CBD5E1';
 
         // Specific colors for Irregularity Types
         const chartColors = {
@@ -502,6 +614,14 @@
             CANCEL: '#F87171', // Red
             DIVERT: '#A78BFA', // Violet
             RTB: '#38BDF8'     // Sky blue
+        };
+
+        // Glowing neon colors for futuristic bar charts
+        const chartColorsGlow = {
+            DELAY: 'rgba(251, 191, 36, 0.25)',
+            CANCEL: 'rgba(248, 113, 113, 0.25)',
+            DIVERT: 'rgba(167, 139, 250, 0.25)',
+            RTB: 'rgba(56, 189, 248, 0.25)'
         };
         
         const gridConfig = { 
@@ -541,9 +661,8 @@
         const categoryFilter = document.getElementById('category-filter');
         const resetBtn = document.getElementById('reset-filters');
 
-        // Helper function to trigger file selection dialog
         function triggerFileInput() {
-            fileInput.value = ''; // Reset file input
+            fileInput.value = '';
             fileInput.click();
         }
 
@@ -726,6 +845,7 @@
             updatePeakDateAndAnalysis();
             updateCharts();
             updateTable();
+            renderPivotTable();
         }
 
         function updateKPIs() {
@@ -746,7 +866,6 @@
             document.getElementById('kpi-rtb').innerText = rtbs.toLocaleString('id-ID');
         }
 
-        // DYNAMIC ANALYSIS & PEAK DATE GENERATOR
         function updatePeakDateAndAnalysis() {
             const peakDisplay = document.getElementById('peak-date-display');
             const peakCount = document.getElementById('peak-date-count');
@@ -761,7 +880,6 @@
                 return;
             }
 
-            // Grouping by Date
             const dateMap = {};
             filteredData.forEach(item => {
                 if (!dateMap[item.date]) {
@@ -772,7 +890,6 @@
                 dateMap[item.date].airports[item.airport] = (dateMap[item.date].airports[item.airport] || 0) + 1;
             });
 
-            // Find max date
             let peakDate = null;
             let maxTotal = -1;
 
@@ -789,12 +906,10 @@
             const formattedPeakDate = formatDateIndonesia(peakDate);
             const peakPercentage = ((maxTotal / filteredData.length) * 100).toFixed(1);
 
-            // Find top affected airport on peak date
             const sortedPeakAirports = Object.entries(peakData.airports).sort((a, b) => b[1] - a[1]);
             const topPeakAirport = sortedPeakAirports[0] ? sortedPeakAirports[0][0] : 'Seluruh Bandara';
             const topPeakAirportCount = sortedPeakAirports[0] ? sortedPeakAirports[0][1] : 0;
 
-            // Find primary irregularity category on peak date
             const typeCounts = [
                 { name: 'Delay', val: peakData.DELAY, color: 'text-amber-400' },
                 { name: 'Cancel', val: peakData.CANCEL, color: 'text-red-400' },
@@ -807,7 +922,6 @@
             peakDisplay.innerText = formattedPeakDate;
             peakCount.innerText = `${maxTotal} Kejadian (${peakPercentage}% dari filter saat ini)`;
 
-            // Editorial Redaksi Peak Date
             peakRedaksi.innerHTML = `
                 Puncak frekuensi gangguan operasional penerbangan tertinggi terjadi pada tanggal 
                 <strong class="text-white font-semibold">${formattedPeakDate}</strong> dengan total <strong class="text-rose-400 font-bold">${maxTotal} kejadian</strong>. 
@@ -816,7 +930,6 @@
                 Disarankan untuk mengevaluasi kronologi operasional dan kendala cuaca/teknis pada tanggal tersebut.
             `;
 
-            // Dynamic Breakdown Badges
             peakBreakdown.innerHTML = `
                 <div class="text-[11px] font-mono text-slate-400 mb-1 block w-full text-left lg:text-right">Rincian Tanggal Puncak:</div>
                 <div class="flex flex-wrap gap-1.5 justify-start lg:justify-end">
@@ -835,12 +948,10 @@
                 </div>
             `;
 
-            // Update Narrative for Charts
             updateAllChartRedaksis(dateMap, peakDate, maxTotal);
         }
 
         function updateAllChartRedaksis(dateMap, peakDate, maxTotal) {
-            // 1. Trend Chart Narrative
             const activeDays = Object.keys(dateMap).length;
             const avgDaily = activeDays > 0 ? (filteredData.length / activeDays).toFixed(1) : 0;
             const formattedPeakDate = formatDateIndonesia(peakDate);
@@ -848,10 +959,9 @@
             document.getElementById('trend-redaksi').innerHTML = `
                 Grafik menunjukkan fluktuasi riil harian dari seluruh kategori insiden. Rata-rata kejadian per hari tercatat sebanyak 
                 <strong class="text-blue-300">${avgDaily} kejadian/hari</strong> dari total <strong class="text-white">${activeDays} hari operasional</strong> yang teridentifikasi. 
-                Lonjakan paling signifikan tercatat pada <strong class="text-rose-400">${formattedPeakDate}</strong> (${maxTotal} kejadian). Tren ini mengindikasikan perlunya kesiapan mitigasi pada hari-hari dengan kepadatan tinggi.
+                Lonjakan paling signifikan tercatat pada <strong class="text-rose-400">${formattedPeakDate}</strong> (${maxTotal} kejadian).
             `;
 
-            // 2. Multi-Airport Line Narrative
             const aptCounts = {};
             filteredData.forEach(item => aptCounts[item.airport] = (aptCounts[item.airport] || 0) + 1);
             const topAirportsList = Object.keys(aptCounts).sort((a,b) => aptCounts[b] - aptCounts[a]);
@@ -860,11 +970,15 @@
 
             document.getElementById('multi-airport-redaksi').innerHTML = `
                 Perbandingan pergerakan tren harian mengidentifikasi bahwa Bandara <strong class="text-emerald-300">${a1}</strong> (${aptCounts[a1] || 0} total gangguan) 
-                dan <strong class="text-emerald-300">${a2}</strong> (${aptCounts[a2] || 0} total gangguan) memiliki variabilitas dan frekuensi grafik tertinggi dibanding stasiun lainnya. 
-                Pola tren di stasiun-stasiun utama ini sangat menentukan fluktuasi total kecenderungan gangguan secara nasional.
+                dan <strong class="text-emerald-300">${a2}</strong> (${aptCounts[a2] || 0} total gangguan) memiliki variabilitas grafik tertinggi.
             `;
 
-            // 3. Airport Volume Narrative
+            // Grouped Airport Bar Narrative
+            document.getElementById('grouped-airport-redaksi').innerHTML = `
+                Grafik batang berdampingan (grouped bar chart) di atas menyandingkan secara langsung tingkat keparahan antar jenis gangguan per stasiun. 
+                Melalui komparasi ini, Anda dapat membandingkan rasio <strong class="text-amber-400">Delay</strong>, <strong class="text-red-400">Cancel</strong>, <strong class="text-purple-400">Divert</strong>, dan <strong class="text-sky-400">RTB</strong> secara presisi di setiap bandara utama.
+            `;
+
             const totalEvents = filteredData.length;
             const a1Percent = totalEvents > 0 ? (((aptCounts[a1] || 0) / totalEvents) * 100).toFixed(1) : 0;
             const top3Sum = topAirportsList.slice(0, 3).reduce((sum, apt) => sum + (aptCounts[apt] || 0), 0);
@@ -872,10 +986,9 @@
 
             document.getElementById('airport-volume-redaksi').innerHTML = `
                 Bandara <strong class="text-amber-300">${a1}</strong> menduduki peringkat teratas lokasi dampak gangguan dengan menyumbang <strong class="text-white">${aptCounts[a1] || 0} insiden</strong> (${a1Percent}% dari total data). 
-                Secara kumulatif, 3 bandara teratas (<strong class="text-slate-200">${topAirportsList.slice(0,3).join(', ')}</strong>) berkontribusi sebesar <strong class="text-amber-400">${top3Percent}%</strong> dari keseluruhan gangguan operasional.
+                Secara kumulatif, 3 bandara teratas (<strong class="text-slate-200">${topAirportsList.slice(0,3).join(', ')}</strong>) berkontribusi sebesar <strong class="text-amber-400">${top3Percent}%</strong>.
             `;
 
-            // 4. Composition Narrative
             const typeCounts = { DELAY: 0, CANCEL: 0, DIVERT: 0, RTB: 0 };
             filteredData.forEach(i => typeCounts[i.type]++);
             const sortedTypes = Object.entries(typeCounts).sort((a,b) => b[1] - a[1]);
@@ -884,23 +997,22 @@
             const t1P = totalEvents > 0 ? ((t1[1] / totalEvents) * 100).toFixed(1) : 0;
 
             document.getElementById('composition-redaksi').innerHTML = `
-                Komposisi ketidakberangkatan/gangguan secara riil didominasi oleh jenis <strong class="text-purple-300">${t1[0]}</strong> yaitu sebesar <strong class="text-white">${t1P}%</strong> (${t1[1]} kasus), 
-                kemudian diikuti oleh <strong class="text-slate-200">${t2[0]}</strong> (${t2[1]} kasus). Tingginya proporsi ${t1[0]} menunjukkan fokus utama penanganan perlu diarahkan pada efisiensi ground handling dan penyediaan kompensasi penumpang.
+                Komposisi ketidakberangkatan didominasi oleh jenis <strong class="text-purple-300">${t1[0]}</strong> sebesar <strong class="text-white">${t1P}%</strong> (${t1[1]} kasus), 
+                kemudian diikuti oleh <strong class="text-slate-200">${t2[0]}</strong> (${t2[1]} kasus).
             `;
 
-            // 5. Airport Donut Narrative
             const top5Sum = topAirportsList.slice(0, 5).reduce((sum, apt) => sum + (aptCounts[apt] || 0), 0);
             const top5P = totalEvents > 0 ? ((top5Sum / totalEvents) * 100).toFixed(1) : 0;
 
             document.getElementById('airport-donut-redaksi').innerHTML = `
-                Distribusi gangguan terpusat di 5 bandara utama yang menguasai <strong class="text-sky-300">${top5P}%</strong> dari total keseluruhan insiden. 
-                Konsentrasi insiden di area hub menandakan bahwa kendala operasional sangat dipengaruhi oleh kepadatan lalu lintas penerbangan dan ketersediaan slot di bandara utama.
+                Distribusi gangguan terpusat di 5 bandara utama yang menguasai <strong class="text-sky-300">${top5P}%</strong> dari total keseluruhan insiden.
             `;
         }
 
         function updateCharts() {
             renderCompositionChart();
             renderTrendChart();
+            renderGroupedAirportChart(); // NEW BAR CHART METHOD
             renderAirportChart();
             renderMultiAirportLineChart();
             renderAirportDonutChart();
@@ -933,9 +1045,9 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    layout: { padding: 10 },
+                    layout: { padding: { top: 25, bottom: 25, left: 35, right: 35 } },
                     plugins: {
-                        legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, boxWidth: 8, color: '#CBD5E1' } },
+                        legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, boxWidth: 8, color: '#F1F5F9', font: {size: 12} } },
                         tooltip: {
                             backgroundColor: 'rgba(15, 23, 42, 0.95)',
                             titleColor: '#F8FAFC',
@@ -958,14 +1070,22 @@
                             }
                         },
                         datalabels: {
-                            color: '#0B1121',
-                            font: { family: "'Inter'", weight: 'bold', size: 11 },
+                            color: '#FFFFFF',
+                            anchor: 'end',
+                            align: 'end',
+                            offset: 15,
+                            backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                            borderColor: 'rgba(255, 255, 255, 0.15)',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            padding: 5,
+                            font: { family: "'Inter'", weight: 'bold', size: 12 },
                             formatter: (value, ctx) => {
                                 let sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
                                 if (value === 0 || sum === 0) return null;
                                 let percentage = (value * 100 / sum);
                                 if (percentage < 5) return null; 
-                                return percentage.toFixed(0) + "%";
+                                return value + " (" + percentage.toFixed(0) + "%)";
                             }
                         }
                     },
@@ -984,10 +1104,10 @@
 
             const sortedDates = Object.keys(dateMap).sort();
             const datasets = [
-                { label: 'Delay', data: [], backgroundColor: chartColors.DELAY },
-                { label: 'Cancel', data: [], backgroundColor: chartColors.CANCEL },
-                { label: 'Divert', data: [], backgroundColor: chartColors.DIVERT },
-                { label: 'RTB', data: [], backgroundColor: chartColors.RTB }
+                { label: 'Delay', data: [], backgroundColor: chartColorsGlow.DELAY, borderColor: chartColors.DELAY, borderWidth: 2 },
+                { label: 'Cancel', data: [], backgroundColor: chartColorsGlow.CANCEL, borderColor: chartColors.CANCEL, borderWidth: 2 },
+                { label: 'Divert', data: [], backgroundColor: chartColorsGlow.DIVERT, borderColor: chartColors.DIVERT, borderWidth: 2 },
+                { label: 'RTB', data: [], backgroundColor: chartColorsGlow.RTB, borderColor: chartColors.RTB, borderWidth: 2 }
             ];
 
             sortedDates.forEach(date => {
@@ -1007,15 +1127,109 @@
 
             trendChartInstance = new Chart(ctx, {
                 type: 'bar',
+                plugins: [ChartDataLabels],
                 data: { labels: sortedDates, datasets: datasets },
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     scales: {
-                        x: { stacked: true, grid: { display: false }, ticks: { color: '#94A3B8' } },
-                        y: { stacked: true, beginAtZero: true, grid: gridConfig, border: {display: false}, ticks: { color: '#94A3B8' } }
+                        x: { stacked: true, grid: { display: false }, ticks: { color: '#E2E8F0', font: {size: 11} } },
+                        y: { stacked: true, beginAtZero: true, grid: gridConfig, border: {display: false}, ticks: { color: '#E2E8F0', font: {size: 11} } }
                     },
                     plugins: {
-                        legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8, color: '#CBD5E1' } }
+                        legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8, color: '#F1F5F9', font: {size: 12} } },
+                        datalabels: {
+                            color: '#FFFFFF',
+                            textShadowColor: 'rgba(0, 0, 0, 0.9)',
+                            textShadowBlur: 4,
+                            font: { family: "'Inter'", weight: 'bold', size: 11 },
+                            formatter: (value) => value > 0 ? value : null,
+                            anchor: 'center',
+                            align: 'center'
+                        }
+                    }
+                }
+            });
+        }
+
+        // NEW CHART FUNCTION: Grouped Bar Chart comparing Delay, Cancel, Divert, RTB side-by-side per Airport
+        function renderGroupedAirportChart() {
+            const ctx = document.getElementById('groupedAirportChart').getContext('2d');
+            
+            const aptMap = {};
+            filteredData.forEach(item => {
+                if(!aptMap[item.airport]) aptMap[item.airport] = { total: 0, DELAY: 0, CANCEL: 0, DIVERT: 0, RTB: 0 };
+                aptMap[item.airport].total++;
+                aptMap[item.airport][item.type]++;
+            });
+
+            const sortedAirports = Object.keys(aptMap).sort((a, b) => aptMap[b].total - aptMap[a].total);
+            const topAirports = sortedAirports.slice(0, 12); // Display top 12 bandara for clear side-by-side view
+
+            const datasets = [
+                { label: 'Delay', data: [], backgroundColor: chartColors.DELAY, borderColor: '#1E293B', borderWidth: 1, borderRadius: 4 },
+                { label: 'Cancel', data: [], backgroundColor: chartColors.CANCEL, borderColor: '#1E293B', borderWidth: 1, borderRadius: 4 },
+                { label: 'Divert', data: [], backgroundColor: chartColors.DIVERT, borderColor: '#1E293B', borderWidth: 1, borderRadius: 4 },
+                { label: 'RTB', data: [], backgroundColor: chartColors.RTB, borderColor: '#1E293B', borderWidth: 1, borderRadius: 4 }
+            ];
+
+            topAirports.forEach(apt => {
+                datasets[0].data.push(aptMap[apt].DELAY);
+                datasets[1].data.push(aptMap[apt].CANCEL);
+                datasets[2].data.push(aptMap[apt].DIVERT);
+                datasets[3].data.push(aptMap[apt].RTB);
+            });
+
+            if (groupedAirportChartInstance) groupedAirportChartInstance.destroy();
+
+            groupedAirportChartInstance = new Chart(ctx, {
+                type: 'bar',
+                plugins: [ChartDataLabels],
+                data: { 
+                    labels: topAirports, 
+                    datasets: datasets 
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { 
+                            stacked: false, 
+                            grid: { display: false }, 
+                            ticks: { color: '#F1F5F9', font: { family: 'monospace', size: 11, weight: 'bold' } } 
+                        },
+                        y: { 
+                            stacked: false, 
+                            beginAtZero: true, 
+                            grid: gridConfig, 
+                            border: { display: false }, 
+                            ticks: { color: '#E2E8F0', font: { size: 11 } } 
+                        }
+                    },
+                    plugins: {
+                        legend: { 
+                            position: 'top', 
+                            align: 'end', 
+                            labels: { usePointStyle: true, boxWidth: 10, color: '#F1F5F9', font: { size: 12 } } 
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleColor: '#F8FAFC',
+                            bodyColor: '#CBD5E1',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            padding: 10,
+                            cornerRadius: 8
+                        },
+                        datalabels: {
+                            color: '#FFFFFF',
+                            textShadowColor: 'rgba(0, 0, 0, 0.9)',
+                            textShadowBlur: 4,
+                            font: { family: "'Inter'", weight: 'bold', size: 10 },
+                            formatter: (value) => value > 0 ? value : null,
+                            anchor: 'end',
+                            align: 'top',
+                            offset: 2
+                        }
                     }
                 }
             });
@@ -1034,10 +1248,10 @@
              const topAirports = sortedAirports.slice(0, 20);
 
              const datasets = [
-                 { label: 'Delay', data: [], backgroundColor: chartColors.DELAY },
-                 { label: 'Cancel', data: [], backgroundColor: chartColors.CANCEL },
-                 { label: 'Divert', data: [], backgroundColor: chartColors.DIVERT },
-                 { label: 'RTB', data: [], backgroundColor: chartColors.RTB }
+                 { label: 'Delay', data: [], backgroundColor: chartColorsGlow.DELAY, borderColor: chartColors.DELAY, borderWidth: 2 },
+                 { label: 'Cancel', data: [], backgroundColor: chartColorsGlow.CANCEL, borderColor: chartColors.CANCEL, borderWidth: 2 },
+                 { label: 'Divert', data: [], backgroundColor: chartColorsGlow.DIVERT, borderColor: chartColors.DIVERT, borderWidth: 2 },
+                 { label: 'RTB', data: [], backgroundColor: chartColorsGlow.RTB, borderColor: chartColors.RTB, borderWidth: 2 }
              ];
 
              topAirports.forEach(apt => {
@@ -1057,16 +1271,26 @@
 
              airportChartInstance = new Chart(ctx, {
                  type: 'bar',
+                 plugins: [ChartDataLabels],
                  data: { labels: topAirports, datasets: datasets },
                  options: {
                      responsive: true, maintainAspectRatio: false,
                      indexAxis: 'y',
                      scales: {
-                         x: { stacked: true, grid: gridConfig, border: {display: false}, ticks: { color: '#94A3B8' } },
-                         y: { stacked: true, grid: { display: false }, ticks: { color: '#CBD5E1', font: {family: 'monospace'} } }
+                         x: { stacked: true, grid: gridConfig, border: {display: false}, ticks: { color: '#E2E8F0', font: {size: 11} } },
+                         y: { stacked: true, grid: { display: false }, ticks: { color: '#F1F5F9', font: {family: 'monospace', size: 11, weight: 'bold'} } }
                      },
                      plugins: {
-                         legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8, color: '#CBD5E1' } }
+                         legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8, color: '#F1F5F9', font: {size: 12} } },
+                         datalabels: {
+                             color: '#FFFFFF',
+                             textShadowColor: 'rgba(0, 0, 0, 0.9)',
+                             textShadowBlur: 4,
+                             font: { family: "'Inter'", weight: 'bold', size: 11 },
+                             formatter: (value) => value > 0 ? value : null,
+                             anchor: 'center',
+                             align: 'center'
+                         }
                      }
                  }
              });
@@ -1114,7 +1338,7 @@
                     fill: false,
                     tension: 0.4,
                     borderWidth: 3,
-                    pointRadius: 0,
+                    pointRadius: 4,
                     pointHoverRadius: 6,
                     pointHitRadius: 15,
                     pointBackgroundColor: color,
@@ -1127,6 +1351,7 @@
             
             multiAirportLineChartInstance = new Chart(ctx, {
                 type: 'line',
+                plugins: [ChartDataLabels],
                 data: { labels: sortedDates, datasets: datasets },
                 options: {
                     responsive: true, maintainAspectRatio: false,
@@ -1134,7 +1359,7 @@
                     plugins: {
                         legend: { 
                             position: 'bottom',
-                            labels: { boxWidth: 10, usePointStyle: true, padding: 12, font: {size: 11}, color: '#CBD5E1' }
+                            labels: { boxWidth: 10, usePointStyle: true, padding: 12, font: {size: 12}, color: '#F1F5F9' }
                         },
                         tooltip: {
                             backgroundColor: 'rgba(15, 23, 42, 0.95)',
@@ -1144,18 +1369,28 @@
                             bodyColor: '#CBD5E1',
                             padding: 10,
                             usePointStyle: true
+                        },
+                        datalabels: {
+                            color: (ctx) => ctx.dataset.borderColor,
+                            font: { family: "'Inter'", weight: 'bold', size: 11 },
+                            textShadowColor: 'rgba(11, 17, 33, 0.9)',
+                            textShadowBlur: 4,
+                            formatter: (value) => value > 0 ? value : null,
+                            align: 'top',
+                            anchor: 'end',
+                            offset: 4
                         }
                     },
                     scales: {
                         x: { 
                             grid: { display: false }, 
-                            ticks: { color: '#94A3B8', maxRotation: 45, autoSkip: true, maxTicksLimit: 15 } 
+                            ticks: { color: '#E2E8F0', font: {size: 11}, maxRotation: 45, autoSkip: true, maxTicksLimit: 15 } 
                         },
                         y: { 
                             beginAtZero: true, 
                             grid: gridConfig, 
                             border: {display: false}, 
-                            ticks: { color: '#94A3B8', stepSize: 1 } 
+                            ticks: { color: '#E2E8F0', font: {size: 11}, stepSize: 1 } 
                         }
                     }
                 }
@@ -1203,9 +1438,9 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    layout: { padding: 10 },
+                    layout: { padding: { top: 25, bottom: 25, left: 35, right: 35 } },
                     plugins: {
-                        legend: { position: 'bottom', labels: { padding: 12, usePointStyle: true, boxWidth: 8, color: '#CBD5E1', font: {size: 11} } },
+                        legend: { position: 'bottom', labels: { padding: 12, usePointStyle: true, boxWidth: 8, color: '#F1F5F9', font: {size: 12} } },
                         tooltip: {
                             backgroundColor: 'rgba(15, 23, 42, 0.95)',
                             titleColor: '#F8FAFC',
@@ -1228,16 +1463,22 @@
                             }
                         },
                         datalabels: {
-                            color: '#F8FAFC',
-                            font: { family: "'Inter'", weight: 'bold', size: 11 },
-                            textShadowColor: 'rgba(0,0,0,0.5)',
-                            textShadowBlur: 4,
+                            color: '#FFFFFF',
+                            anchor: 'end',
+                            align: 'end',
+                            offset: 15,
+                            backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                            borderColor: 'rgba(255, 255, 255, 0.15)',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            padding: 5,
+                            font: { family: "'Inter'", weight: 'bold', size: 12 },
                             formatter: (value, ctx) => {
                                 let sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
                                 if (value === 0 || sum === 0) return null;
                                 let percentage = (value * 100 / sum);
                                 if (percentage < 4) return null;
-                                return percentage.toFixed(0) + "%";
+                                return value + " (" + percentage.toFixed(0) + "%)";
                             }
                         }
                     },
@@ -1260,7 +1501,7 @@
             const element = document.getElementById('dashboard-content');
 
             const canvasOptions = {
-                scale: 1.5,
+                scale: 2.0,
                 useCORS: true,
                 allowTaint: true,
                 logging: false,
@@ -1352,6 +1593,31 @@
             });
         }
 
+        // High-resolution image downloader for PowerPoint & Presentations
+        function downloadChart(canvasId, fileName) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            
+            const tempCanvas = document.createElement('canvas');
+            const ctx = tempCanvas.getContext('2d');
+            
+            // Render High Resolution 3x scale
+            const scale = 3;
+            tempCanvas.width = canvas.width * scale;
+            tempCanvas.height = canvas.height * scale;
+            
+            ctx.fillStyle = '#0B1120';
+            ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+            
+            ctx.scale(scale, scale);
+            ctx.drawImage(canvas, 0, 0);
+            
+            const link = document.createElement('a');
+            link.download = `${fileName}_HighRes.png`;
+            link.href = tempCanvas.toDataURL('image/png', 1.0);
+            link.click();
+        }
+
         function updateTable() {
             const tbody = document.getElementById('data-table-body');
             const countLabel = document.getElementById('table-count-label');
@@ -1389,6 +1655,157 @@
                     <td class="px-5 py-3 text-slate-300 truncate max-w-xs font-sans text-xs" title="${item.remark}">${item.remark}</td>
                 `;
                 tbody.appendChild(tr);
+            });
+        }
+
+        function renderPivotTable() {
+            const tbody = document.getElementById('pivot-table-body');
+            tbody.innerHTML = '';
+
+            if (filteredData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-slate-500 font-mono text-xs">TIDAK ADA DATA</td></tr>';
+                return;
+            }
+
+            const aptMap = {};
+            filteredData.forEach(item => {
+                if(!aptMap[item.airport]) aptMap[item.airport] = { DELAY: 0, CANCEL: 0, DIVERT: 0, RTB: 0, TOTAL: 0 };
+                aptMap[item.airport][item.type]++;
+                aptMap[item.airport].TOTAL++;
+            });
+
+            const sortedAirports = Object.keys(aptMap).sort((a, b) => aptMap[b].TOTAL - aptMap[a].TOTAL);
+
+            sortedAirports.forEach(apt => {
+                const data = aptMap[apt];
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-800/40 transition-colors";
+                
+                const createClickableCell = (count, type, colorClass) => {
+                    if (count === 0) return `<td class="px-5 py-3 text-center text-slate-600 font-mono">-</td>`;
+                    const borderColor = colorClass.replace('text-', 'border-').replace('400', '500/50');
+                    const hoverBg = colorClass.replace('text-', 'bg-').replace('400', '500/10');
+                    return `
+                        <td class="px-5 py-3 text-center">
+                            <button onclick="openDetailModal('${apt}', '${type}')" class="px-3 py-1 rounded-md bg-slate-800/50 hover:${hoverBg} border border-slate-700/50 hover:${borderColor} transition-all font-mono font-bold ${colorClass} hover:shadow-[0_0_12px_currentColor]">
+                                ${count}
+                            </button>
+                        </td>
+                    `;
+                };
+
+                tr.innerHTML = `
+                    <td class="px-5 py-3 whitespace-nowrap font-bold text-slate-200 border-r border-slate-700/50">${apt}</td>
+                    ${createClickableCell(data.DELAY, 'DELAY', 'text-amber-400')}
+                    ${createClickableCell(data.CANCEL, 'CANCEL', 'text-red-400')}
+                    ${createClickableCell(data.DIVERT, 'DIVERT', 'text-purple-400')}
+                    ${createClickableCell(data.RTB, 'RTB', 'text-sky-400')}
+                    <td class="px-5 py-3 text-center border-l border-slate-700/50">
+                        <button onclick="openDetailModal('${apt}', 'ALL')" class="px-3 py-1.5 rounded-md bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/40 transition-all font-mono font-black text-white hover:shadow-[0_0_15px_rgba(59,130,246,0.5)]">
+                            ${data.TOTAL}
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function openDetailModal(airport, type) {
+            const modal = document.getElementById('detail-modal');
+            const modalBox = document.getElementById('modal-content-box');
+            const tbody = document.getElementById('modal-table-body');
+            const title = document.getElementById('modal-title');
+            const subtitle = document.getElementById('modal-subtitle');
+            
+            const detailData = filteredData.filter(item => {
+                const matchApt = item.airport === airport;
+                const matchType = type === 'ALL' ? true : item.type === type;
+                return matchApt && matchType;
+            });
+
+            title.innerText = `Rincian Temuan - ${airport}`;
+            subtitle.innerText = `Kategori: ${type === 'ALL' ? 'Semua Jenis' : type} | Total: ${detailData.length} Data Berdasarkan Filter Saat Ini`;
+
+            tbody.innerHTML = '';
+            detailData.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-white/5 transition-colors";
+                
+                let typeColorClass = 'bg-slate-800 text-slate-300 border-slate-600';
+                let iconClass = 'fa-solid fa-circle-info';
+
+                if(item.type === 'DELAY') { typeColorClass = 'bg-amber-500/10 text-amber-400 border-amber-500/30'; iconClass = 'fa-solid fa-clock'; }
+                if(item.type === 'CANCEL') { typeColorClass = 'bg-red-500/10 text-red-400 border-red-500/30'; iconClass = 'fa-solid fa-ban'; }
+                if(item.type === 'DIVERT') { typeColorClass = 'bg-purple-500/10 text-purple-400 border-purple-500/30'; iconClass = 'fa-solid fa-route'; }
+                if(item.type === 'RTB') { typeColorClass = 'bg-sky-500/10 text-sky-400 border-sky-500/30'; iconClass = 'fa-solid fa-rotate-left'; }
+
+                tr.innerHTML = `
+                    <td class="px-5 py-3 whitespace-nowrap font-mono text-slate-400">${item.date}</td>
+                    <td class="px-5 py-3 whitespace-nowrap font-bold text-slate-200">${item.airport}</td>
+                    <td class="px-5 py-3 whitespace-nowrap font-mono text-blue-300">${item.flightNo}</td>
+                    <td class="px-5 py-3 whitespace-nowrap">
+                        <span class="px-2 py-1 inline-flex items-center gap-1.5 text-[10px] font-bold rounded border ${typeColorClass} tracking-wider">
+                            <i class="${iconClass}"></i> ${item.type}
+                        </span>
+                    </td>
+                    <td class="px-5 py-3 text-slate-300 text-xs">${item.remark}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalBox.classList.remove('scale-95');
+                modalBox.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('detail-modal');
+            const modalBox = document.getElementById('modal-content-box');
+            
+            modalBox.classList.remove('scale-100');
+            modalBox.classList.add('scale-95');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 200);
+        }
+
+        function exportToImage() {
+            if (filteredData.length === 0) {
+                alert("Tidak ada data untuk diekspor.");
+                return;
+            }
+            
+            const btn = document.getElementById('export-img-btn');
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-purple-400"></i><span>Mengekspor...</span>';
+            btn.disabled = true;
+
+            const element = document.getElementById('dashboard-content');
+            
+            html2canvas(element, {
+                scale: 2.5,
+                useCORS: true,
+                backgroundColor: "#0B1120",
+                onclone: (clonedDoc) => {
+                    const clonedElement = clonedDoc.getElementById('dashboard-content');
+                    clonedElement.style.padding = '20px';
+                }
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `Dashboard_Snapshot_${new Date().toISOString().slice(0, 10)}.png`;
+                link.href = canvas.toDataURL('image/png', 1.0);
+                link.click();
+                
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }).catch(err => {
+                console.error("Export Image Error:", err);
+                alert("Gagal mengunduh gambar dashboard.");
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
             });
         }
     </script>
