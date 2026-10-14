@@ -1,1813 +1,720 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Monitoring Dampak Operasional Penerbangan</title>
-    <!-- Tailwind CSS for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- SheetJS for Excel parsing -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- Chart.js for visualizations -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Chart.js DataLabels Plugin -->
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
-    <!-- html2pdf for PDF export -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <!-- FontAwesome for icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  LineChart, Line, PieChart, Pie, Cell, Sector, Area, AreaChart, LabelList
+} from 'recharts';
+import { AlertCircle, PieChart as PieChartIcon, BarChart3, TrendingUp, MapPin, Activity, FileSpreadsheet, UploadCloud, CheckCircle2, ShieldAlert, Calendar } from 'lucide-react';
+
+// Warna-warna neon kontras tinggi khas dark dashboard
+const COLORS = ['#38bdf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#2dd4bf', '#fb923c', '#a3e635', '#22d3ee'];
+
+// Fungsi parser tanggal (format: DD/MM/YYYY) - Diubah untuk mengabaikan jam
+function parseDateString(val) {
+  if (!val) return new Date();
+  
+  // Jika formatnya sudah object Date (bawaan Excel)
+  if (val instanceof Date) {
+    return new Date(val.getFullYear(), val.getMonth(), val.getDate());
+  }
+  
+  // Jika formatnya angka (serial number Excel)
+  if (typeof val === 'number') {
+     const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+  
+  let strVal = String(val).trim();
+  
+  // Abaikan format jam dengan mengambil string sebelum spasi atau huruf 'T' (jika ISO)
+  // Contoh "30/09/2026 14:30" akan menjadi "30/09/2026"
+  strVal = strVal.split(' ')[0];
+  strVal = strVal.split('T')[0];
+  
+  const parts = strVal.split(/[-/]/);
+  
+  if (parts.length === 3) {
+    if (parts[2].length === 4) {
+      return new Date(parts[2], parseInt(parts[1]) - 1, parts[0]);
+    }
+    if (parts[0].length === 4) {
+      return new Date(parts[0], parseInt(parts[1]) - 1, parts[2]);
+    }
+  }
+  
+  const d = new Date(strVal);
+  if (isNaN(d.getTime())) return new Date();
+
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-800/95 backdrop-blur-sm p-4 rounded-xl shadow-2xl border border-slate-700">
+        <p className="font-semibold text-slate-200 mb-3 border-b border-slate-700 pb-2">{label}</p>
+        {payload.map((entry, index) => (
+          <p key={`item-${index}`} className="text-sm flex items-center justify-between gap-4 mb-1" style={{ color: entry.color || entry.fill }}>
+            <span className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full inline-block shadow-[0_0_8px_currentColor]" style={{ backgroundColor: entry.color || entry.fill }}></span>
+                {entry.name}
+            </span>
+            <span className="font-bold text-slate-100">{entry.value}</span>
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
+const renderActiveShape = (props) => {
+  const RADIAN = Math.PI / 180;
+  const { cx, cy, midAngle, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value } = props;
+  const sin = Math.sin(-RADIAN * midAngle);
+  const cos = Math.cos(-RADIAN * midAngle);
+  const sx = cx + (outerRadius + 10) * cos;
+  const sy = cy + (outerRadius + 10) * sin;
+  const mx = cx + (outerRadius + 30) * cos;
+  const my = cy + (outerRadius + 30) * sin;
+  const ex = mx + (cos >= 0 ? 1 : -1) * 22;
+  const ey = my;
+  const textAnchor = cos >= 0 ? 'start' : 'end';
+
+  return (
+    <g>
+      <text x={cx} y={cy} dy={-5} textAnchor="middle" fill="#f8fafc" className="font-bold text-base">
+        {payload.name.length > 15 ? payload.name.substring(0, 15) + '...' : payload.name}
+      </text>
+      <text x={cx} y={cy} dy={15} textAnchor="middle" fill="#94a3b8" className="text-xs font-medium">
+        {value} Terdata
+      </text>
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={innerRadius}
+        outerRadius={outerRadius + 5}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={fill}
+        className="drop-shadow-md"
+      />
+      <Sector
+        cx={cx}
+        cy={cy}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        innerRadius={outerRadius + 10}
+        outerRadius={outerRadius + 14}
+        fill={fill}
+      />
+      <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" strokeWidth={2} />
+      <circle cx={ex} cy={ey} r={3} fill={fill} stroke="none" className="drop-shadow-[0_0_5px_currentColor]" />
+      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} textAnchor={textAnchor} fill="#e2e8f0" className="text-sm font-medium">{`${value} Data`}</text>
+      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} dy={18} textAnchor={textAnchor} fill="#38bdf8" className="text-xs font-bold">
+        {`(${(percent * 100).toFixed(1)}%)`}
+      </text>
+    </g>
+  );
+};
+
+// Custom Label untuk Pie Chart agar nilai proporsional di tengah potongan
+const renderCustomizedPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, value }) => {
+  const RADIAN = Math.PI / 180;
+  // Letakkan label di tengah-tengah ketebalan donat
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  // Sembunyikan label jika porsinya terlalu kecil (< 5%) agar teks tidak menumpuk/berantakan
+  if (percent < 0.05) return null;
+
+  return (
+    <text x={x} y={y} fill="#ffffff" textAnchor="middle" dominantBaseline="central" fontSize={13} fontWeight="bold" style={{ textShadow: '0px 2px 4px rgba(0,0,0,0.8)' }}>
+      {value}
+    </text>
+  );
+};
+
+export default function App() {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [fileName, setFileName] = useState(null);
+  
+  const [selectedAirport, setSelectedAirport] = useState('All');
+  const [timeView, setTimeView] = useState('daily');
+  const [activeIndexTypes, setActiveIndexTypes] = useState(0);
+  const [activeIndexAirports, setActiveIndexAirports] = useState(0);
+  const [isSheetJSLoaded, setIsSheetJSLoaded] = useState(false);
+  
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (window.XLSX) {
+      setIsSheetJSLoaded(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    script.async = true;
+    script.onload = () => setIsSheetJSLoaded(true);
+    document.body.appendChild(script);
+  }, []);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
     
-    <!-- Google Fonts: Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0B1120; /* Darker modern background */
-            background-image: 
-                radial-gradient(at 0% 0%, rgba(30, 58, 138, 0.15) 0, transparent 50%), 
-                radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.1) 0, transparent 50%),
-                radial-gradient(at 50% 100%, rgba(14, 165, 233, 0.1) 0, transparent 50%);
-            background-attachment: fixed;
-            color: #94A3B8;
-        }
+    setLoading(true);
+    setError(null);
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const arrayBuffer = evt.target.result;
+        const dataUint8 = new Uint8Array(arrayBuffer);
+        const workbook = window.XLSX.read(dataUint8, { type: 'array', cellDates: true });
         
-        /* Modern Glassmorphism Panel Style */
-        .airport-card {
-            background: rgba(15, 23, 42, 0.55);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border-radius: 1.25rem;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-            padding: 1.5rem;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
         
-        .airport-card:hover {
-            border-color: rgba(59, 130, 246, 0.4);
-            box-shadow: 0 10px 40px -10px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-            transform: translateY(-2px);
-        }
-
-        /* High-Definition Crisp Canvas Rendering */
-        canvas {
-            image-rendering: -webkit-optimize-contrast;
-            image-rendering: crisp-edges;
-        }
-
-        /* KPI card top accent borders */
-        .kpi-total { border-top: 4px solid #3B82F6; background: linear-gradient(180deg, rgba(59,130,246,0.1) 0%, rgba(15,23,42,0) 100%), rgba(15, 23, 42, 0.55); }
-        .kpi-delay { border-top: 4px solid #F59E0B; background: linear-gradient(180deg, rgba(245,158,11,0.08) 0%, rgba(15,23,42,0) 100%), rgba(15, 23, 42, 0.55); }
-        .kpi-cancel { border-top: 4px solid #EF4444; background: linear-gradient(180deg, rgba(239,68,68,0.08) 0%, rgba(15,23,42,0) 100%), rgba(15, 23, 42, 0.55); }
-        .kpi-divert { border-top: 4px solid #8B5CF6; background: linear-gradient(180deg, rgba(139,92,246,0.08) 0%, rgba(15,23,42,0) 100%), rgba(15, 23, 42, 0.55); }
-        .kpi-rtb { border-top: 4px solid #0EA5E9; background: linear-gradient(180deg, rgba(14,165,233,0.08) 0%, rgba(15,23,42,0) 100%), rgba(15, 23, 42, 0.55); }
-
-        /* Custom dark scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #0F172A; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        // 1. Cari baris header yang sebenarnya (mengatasi file yang punya judul/kop laporan di baris atas)
+        const rawData = window.XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        let headerRowIndex = 0;
+        let maxScore = -1;
         
-        .table-container::-webkit-scrollbar { width: 5px; height: 5px; }
-
-        /* Dropzone animation */
-        @keyframes pulse-border {
-            0% { border-color: rgba(59, 130, 246, 0.3); }
-            50% { border-color: rgba(59, 130, 246, 0.8); box-shadow: 0 0 20px rgba(59, 130, 246, 0.25); }
-            100% { border-color: rgba(59, 130, 246, 0.3); }
-        }
-        .dropzone {
-            background: rgba(15, 23, 42, 0.6);
-            border-color: rgba(51, 65, 85, 0.8);
-        }
-        .dropzone:hover { animation: pulse-border 2s infinite; }
-
-        /* Form Controls Dark Theme */
-        select, input[type="date"] {
-            color: #F8FAFC !important;
-            background-color: rgba(15, 23, 42, 0.7) !important;
-            border-color: rgba(51, 65, 85, 0.8) !important;
-            color-scheme: dark;
-        }
-        select:focus, input[type="date"]:focus {
-            border-color: #3B82F6 !important;
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) !important;
-            outline: none;
-        }
-        select option {
-            background-color: #1E293B;
-            color: #F8FAFC;
+        for (let i = 0; i < Math.min(20, rawData.length); i++) {
+            const row = rawData[i];
+            if (!row || !Array.isArray(row)) continue;
+            
+            let score = 0;
+            const rowStr = row.map(cell => String(cell).toLowerCase()).join(' ');
+            
+            // Poin deteksi keyword header
+            if (rowStr.match(/tanggal|date|waktu|hari|tgl/)) score += 3;
+            if (rowStr.match(/bandara|airport|stasiun|station|lokasi|branch|cabang/)) score += 3;
+            if (rowStr.match(/jenis|kategori|type|gangguan|irreg|masalah/)) score += 3;
+            
+            // Tambah poin jika banyak kolom berisi string (indikasi kuat ini adalah header sesungguhnya)
+            score += row.filter(cell => typeof cell === 'string' && cell.trim() !== '').length * 0.5;
+            
+            if (score > maxScore) {
+                maxScore = score;
+                headerRowIndex = i;
+            }
         }
 
-        /* Table Styling */
-        th {
-            background-color: rgba(15, 23, 42, 0.9) !important;
-            color: #94A3B8 !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-        }
-        td {
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03) !important;
-            color: #CBD5E1 !important;
-        }
-        tbody tr:hover {
-            background-color: rgba(255, 255, 255, 0.04) !important;
-        }
-    </style>
-</head>
-<body class="h-screen flex flex-col overflow-hidden text-slate-300">
+        // 2. Baca ulang data menggunakan index header yang sudah terdeteksi akurat
+        const jsonData = window.XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex, defval: '' });
 
-    <!-- Hidden Master File Input for Re-uploading -->
-    <input type="file" id="excel-file" accept=".xlsx, .xls, .csv" class="hidden">
+        if (!jsonData || jsonData.length === 0) throw new Error("Data Excel kosong atau format tabel tidak ditemukan.");
 
-    <!-- Top Navigation Bar -->
-    <nav class="bg-[#0B1121]/90 backdrop-blur-md text-white shadow-[0_4px_30px_rgba(0,0,0,0.5)] z-10 flex-shrink-0 border-b border-slate-800">
-        <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16">
-                <div class="flex items-center gap-3.5">
-                    <div class="bg-blue-500/10 p-2.5 rounded-xl border border-blue-500/20 shadow-[0_0_12px_rgba(59,130,246,0.2)]">
-                        <i class="fa-solid fa-plane-triangle text-blue-400 text-xl"></i>
-                    </div>
-                    <div>
-                        <span class="font-bold text-lg tracking-wide block leading-tight text-slate-100">Monitoring Dampak Operasional Penerbangan</span>
-                        <span class="text-[11px] text-blue-400 font-medium tracking-wider block">Airport Safety & RFF Group</span>
-                    </div>
+        const headers = Object.keys(jsonData[0]);
+        
+        // 3. Pencarian kolom dengan regex yang diperluas
+        const findCol = (regex) => headers.find(h => h && String(h).toLowerCase().match(regex));
+        
+        let dateCol = findCol(/tanggal|date|waktu|hari|tgl/i);
+        let airportCol = findCol(/bandara|airport|stasiun|station|lokasi|branch|cabang/i);
+        let typeCol = findCol(/jenis|kategori|type|gangguan|irreg|masalah|deskripsi|keterangan/i);
+
+        // Fallback jika tidak ditemukan (ambil 3 kolom pertama yang tidak kosong)
+        const validHeaders = headers.filter(h => h && !h.startsWith('__EMPTY'));
+        if (!dateCol) dateCol = validHeaders[0] || headers[0];
+        if (!airportCol) airportCol = validHeaders[1] || headers[1];
+        if (!typeCol) typeCol = validHeaders[2] || headers[2];
+
+        const processedData = jsonData.map(row => {
+          const rawDate = row[dateCol];
+          const parsedDate = parseDateString(rawDate);
+          
+          // Gunakan format lokal manual untuk menghindari pergeseran hari akibat perbedaan zona waktu
+          const yyyy = parsedDate.getFullYear();
+          const mm = String(parsedDate.getMonth() + 1).padStart(2, '0');
+          const dd = String(parsedDate.getDate()).padStart(2, '0');
+          
+          const dateStr = `${yyyy}-${mm}-${dd}`;
+          const monthStr = `${yyyy}-${mm}`;
+          
+          const airportVal = row[airportCol] ? String(row[airportCol]).trim() : '';
+          const typeVal = row[typeCol] ? String(row[typeCol]).trim() : '';
+          
+          return {
+            date: parsedDate,
+            dateStr,
+            monthStr,
+            airport: airportVal || 'Tanpa Bandara',
+            type: typeVal || 'Lain-lain',
+            rawDateStr: String(rawDate).toLowerCase() // untuk pengecekan baris header
+          };
+        }).filter(d => {
+            // Evaluasi baris: Buang jika terbaca sebagai judul kolom agar total data akurat (922)
+            const isHeader = String(d.type).toLowerCase() === String(typeCol).toLowerCase() || 
+                             d.rawDateStr.includes('tanggal') || 
+                             d.rawDateStr.includes('date') ||
+                             String(d.airport).toLowerCase().includes('bandara');
+            const isValidDate = !isNaN(d.date.getTime());
+            
+            return !isHeader && isValidDate && d.airport !== 'undefined' && d.airport !== '';
+        });
+
+        if (processedData.length === 0) throw new Error("Gagal mengekstrak data baris. Pastikan format kolom sesuai.");
+
+        setData(processedData);
+        setFileName(file.name);
+        setLoading(false);
+      } catch (err) {
+        setError(err.message || "Gagal membaca format file.");
+        setLoading(false);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = null;
+  };
+
+  const {
+    airports, totalByAirport, typesByAirport, trendData, overallTypes, overallAirports, totalRecords, mostFrequentType, highestAirport
+  } = useMemo(() => {
+    if (!data.length) return { airports: [], totalByAirport: [], typesByAirport: [], trendData: [], overallTypes: [], overallAirports: [], totalRecords: 0, mostFrequentType: '-', highestAirport: '-' };
+
+    const airportSet = new Set(data.map(d => d.airport));
+    const uniqueAirports = Array.from(airportSet).sort();
+    const filteredData = selectedAirport === 'All' ? data : data.filter(d => d.airport === selectedAirport);
+
+    // Global Counts
+    const airportCounts = {};
+    const globalTypeCounts = {};
+    data.forEach(d => {
+      airportCounts[d.airport] = (airportCounts[d.airport] || 0) + 1;
+      globalTypeCounts[d.type] = (globalTypeCounts[d.type] || 0) + 1;
+    });
+
+    const overallAirportsData = Object.entries(airportCounts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+    const overallTypesData = Object.entries(globalTypeCounts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+
+    // Filtered Counts
+    const typeCounts = {};
+    filteredData.forEach(d => {
+      typeCounts[d.type] = (typeCounts[d.type] || 0) + 1;
+    });
+    const typesByAirportData = Object.entries(typeCounts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+
+    // Trends
+    const trendMap = {};
+    filteredData.forEach(d => {
+      const key = timeView === 'daily' ? d.dateStr : d.monthStr;
+      if (!trendMap[key]) trendMap[key] = { name: key, total: 0 };
+      trendMap[key].total += 1;
+    });
+    const trendDataArr = Object.values(trendMap).sort((a, b) => a.name.localeCompare(b.name));
+
+    return {
+      airports: uniqueAirports,
+      totalByAirport: overallAirportsData,
+      overallAirports: overallAirportsData,
+      typesByAirport: typesByAirportData,
+      trendData: trendDataArr,
+      overallTypes: overallTypesData,
+      totalRecords: data.length,
+      mostFrequentType: overallTypesData[0]?.name || '-',
+      highestAirport: overallAirportsData[0] ? `${overallAirportsData[0].name} (${overallAirportsData[0].value})` : '-'
+    };
+  }, [data, selectedAirport, timeView]);
+
+  const pivotData = useMemo(() => {
+    if (!data.length) return { rows: [], airports: [], totals: {} };
+
+    // 1. Hitung frekuensi per bandara untuk mengurutkan kolom (terbanyak di kiri)
+    const airportCounts = {};
+    data.forEach(d => {
+        airportCounts[d.airport] = (airportCounts[d.airport] || 0) + 1;
+    });
+    const sortedAirports = Object.keys(airportCounts).sort((a, b) => airportCounts[b] - airportCounts[a]);
+
+    // 2. Buat matriks data harian (Tanggal vs Bandara)
+    const dateMap = {};
+    data.forEach(d => {
+        if (!dateMap[d.dateStr]) {
+            dateMap[d.dateStr] = {
+                dateStr: d.dateStr,
+                dateObj: d.date,
+                day: d.date.getDate(),
+                month: d.date.getMonth(),
+                total: 0
+            };
+            sortedAirports.forEach(apt => dateMap[d.dateStr][apt] = 0);
+        }
+        dateMap[d.dateStr][d.airport]++;
+        dateMap[d.dateStr].total++;
+    });
+
+    // Urutkan berdasarkan tanggal kronologis
+    let rows = Object.values(dateMap).sort((a, b) => a.dateObj - b.dateObj);
+
+    // 3. Sistem pewarnaan selang-seling berdasarkan Bulan (seperti di referensi gambar)
+    let currentMonth = -1;
+    let colorIndex = -1;
+    const colors = ['bg-orange-900/50 text-orange-200', 'bg-purple-900/50 text-purple-200', 'bg-emerald-900/50 text-emerald-200'];
+
+    rows = rows.map(row => {
+        if (currentMonth === -1) {
+            currentMonth = row.month;
+            colorIndex = 0;
+        } else if (row.month !== currentMonth) {
+            currentMonth = row.month;
+            colorIndex = (colorIndex + 1) % colors.length;
+        }
+        return { ...row, colorClass: colors[colorIndex] };
+    });
+
+    // 4. Kalkulasi Total Akumulasi (baris paling bawah)
+    const totals = { total: 0 };
+    sortedAirports.forEach(apt => totals[apt] = 0);
+    rows.forEach(row => {
+        sortedAirports.forEach(apt => totals[apt] += row[apt]);
+        totals.total += row.total;
+    });
+
+    return { rows, airports: sortedAirports, totals };
+  }, [data]);
+
+  return (
+    <div className="min-h-screen bg-[#0b1121] text-slate-300 font-sans p-4 md:p-6 overflow-x-hidden selection:bg-cyan-900 selection:text-cyan-100">
+      
+      {/* Background glow effects */}
+      <div className="fixed top-0 left-0 w-[500px] h-[500px] bg-cyan-900/20 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="fixed bottom-0 right-0 w-[600px] h-[600px] bg-blue-900/10 rounded-full blur-[150px] pointer-events-none"></div>
+
+      <div className="max-w-[1400px] mx-auto space-y-6 relative z-10">
+        
+        {/* Header Section */}
+        <div className="bg-[#111827]/80 backdrop-blur-md rounded-2xl border border-slate-800/80 p-5 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.3)] shrink-0">
+               <Activity className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tight">
+                MONITORING DAMPAK GANGGUAN
+              </h1>
+              <div className="flex items-center gap-2 mt-1.5">
+                  <span className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md bg-slate-800 text-slate-400 border border-slate-700">
+                      <Calendar className="w-3.5 h-3.5" /> Data Operasional
+                  </span>
+                  {fileName && (
+                    <span className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md bg-emerald-900/30 text-emerald-400 border border-emerald-800/50">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> {fileName}
+                    </span>
+                  )}
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
+            <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} ref={fileInputRef} className="hidden" />
+            <button 
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!isSheetJSLoaded || loading}
+                className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold transition-all w-full md:w-auto
+                    ${(!isSheetJSLoaded || loading)
+                        ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' 
+                        : 'bg-blue-600/90 hover:bg-blue-500 text-white border border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]'}`}
+            >
+                {loading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : <UploadCloud className="w-5 h-5" />}
+                <span>Upload Excel Data</span>
+            </button>
+            
+            {data.length > 0 && (
+                <div className="flex items-center gap-2 bg-[#1e293b] px-4 py-3 rounded-xl border border-slate-700 w-full md:w-auto shadow-inner">
+                    <MapPin className="w-5 h-5 text-cyan-400 flex-shrink-0" />
+                    <select 
+                        value={selectedAirport} 
+                        onChange={(e) => setSelectedAirport(e.target.value)}
+                        className="bg-transparent border-none focus:ring-0 text-slate-200 font-medium outline-none cursor-pointer w-full"
+                    >
+                        <option value="All">Semua Bandara (Nasional)</option>
+                        {airports.map(apt => (
+                            <option key={apt} value={apt} className="bg-slate-800">{apt}</option>
+                        ))}
+                    </select>
                 </div>
-                
-                <div class="flex items-center gap-3">
-                    <!-- Export Image Button -->
-                    <button id="export-img-btn" onclick="exportToImage()" class="hidden sm:flex items-center gap-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all shadow-sm">
-                        <i class="fa-solid fa-image text-purple-400"></i>
-                        <span>Download Gambar</span>
-                    </button>
-                    <!-- Export PDF Button -->
-                    <button id="export-pdf-btn" onclick="exportToPDF()" class="hidden sm:flex items-center gap-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all shadow-sm">
-                        <i class="fa-solid fa-file-pdf text-rose-400"></i>
-                        <span>Export PDF</span>
-                    </button>
-                    <!-- Upload Data Baru Button in Header -->
-                    <button id="header-upload-btn" class="hidden sm:flex items-center gap-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all shadow-sm">
-                        <i class="fa-solid fa-file-arrow-up text-blue-400"></i>
-                        <span>Upload Data Baru</span>
-                    </button>
-                    
-                    <div class="flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-lg border border-slate-700/60 text-xs">
-                        <i class="fa-solid fa-circle-dot text-emerald-400 text-[10px] animate-pulse"></i>
-                        <span class="text-slate-300 font-mono" id="last-updated">Status: Menunggu Data</span>
-                    </div>
+            )}
+          </div>
+        </div>
+
+        {error && (
+            <div className="bg-red-900/20 border border-red-500/50 text-red-400 p-4 rounded-xl flex items-start gap-3 animate-in fade-in">
+                <AlertCircle className="w-6 h-6 flex-shrink-0 mt-0.5" />
+                <div>
+                    <h3 className="font-semibold text-red-300">Error System</h3>
+                    <p className="text-sm mt-1">{error}</p>
                 </div>
             </div>
-        </div>
-    </nav>
+        )}
 
-    <!-- Main Content Area -->
-    <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 relative">
-        <div class="max-w-[1400px] mx-auto space-y-6">
-
-            <!-- Initial File Upload Dropzone -->
-            <div id="upload-section" class="airport-card text-center py-16 sm:py-24 dropzone border-2 border-dashed cursor-pointer relative group my-auto">
-                <div class="space-y-6 transition-transform transform group-hover:-translate-y-1">
-                    <div class="w-20 h-20 bg-blue-900/30 rounded-2xl flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(59,130,246,0.2)] border border-blue-500/30">
-                        <i class="fa-solid fa-file-excel text-4xl text-blue-400"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-2xl font-bold text-slate-100 tracking-wide">Upload File Data Irregularity</h3>
-                        <p class="text-sm text-slate-400 mt-2 max-w-md mx-auto">Pilih file Excel (<span class="text-blue-400 font-mono">.xlsx, .csv</span>) berisi laporan penerbangan untuk menampilkan dashboard analisis.</p>
-                    </div>
-                    <button type="button" onclick="triggerFileInput()" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg shadow-[0_0_15px_rgba(37,99,235,0.4)] text-sm font-semibold tracking-wide transition-all">
-                        <i class="fa-solid fa-folder-open"></i> PILIH FILE EXCEL
-                    </button>
+        {/* Empty State */}
+        {!loading && data.length === 0 && !error && (
+            <div className="bg-[#111827]/50 rounded-2xl border border-dashed border-slate-700 h-[60vh] flex flex-col justify-center items-center text-slate-500 gap-6 p-8 text-center backdrop-blur-sm">
+                <div className="w-24 h-24 bg-slate-800/80 rounded-full flex items-center justify-center mb-2 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+                    <FileSpreadsheet className="w-12 h-12 text-slate-600" />
                 </div>
-                
-                <!-- Loading Overlay -->
-                <div id="loading-overlay" class="hidden absolute inset-0 bg-[#0B1121]/90 backdrop-blur-md flex flex-col items-center justify-center rounded-xl z-20 border border-slate-700">
-                    <div class="relative w-16 h-16 flex items-center justify-center mb-4">
-                         <div class="absolute inset-0 border-t-2 border-blue-500 rounded-full animate-spin"></div>
-                         <i class="fa-solid fa-plane text-blue-400 text-xl"></i>
-                    </div>
-                    <p class="text-slate-100 font-semibold text-sm tracking-wider uppercase font-mono">Memproses Data Excel...</p>
-                    <p class="text-slate-400 text-xs mt-1">Membaca dan menyusun data ketidakberangkatan/delay penerbangan</p>
+                <div>
+                    <h3 className="text-2xl font-bold text-slate-300 mb-2">Sistem Siaga</h3>
+                    <p className="max-w-md text-slate-500 mx-auto">
+                        Pusat monitoring belum menerima data masukan. Silakan unggah file <b>"irregularities_export agustus-sept 2026 Test.xlsx"</b> untuk mengaktifkan radar analitik.
+                    </p>
                 </div>
-            </div>
-
-            <!-- Dashboard Main Section (Hidden initially) -->
-            <div id="dashboard-content" class="hidden space-y-6">
-                
-                <!-- Filters Control Panel -->
-                <div class="airport-card flex flex-col lg:flex-row gap-4 items-center justify-between z-20 relative p-5">
-                    <div class="flex flex-wrap lg:flex-nowrap items-center gap-4 w-full">
-                        <div class="flex items-center gap-3 w-full lg:w-auto">
-                            <div class="bg-slate-800 p-2.5 rounded-xl border border-slate-700 shrink-0">
-                                <i class="fa-solid fa-filter text-blue-400"></i>
-                            </div>
-                            <span class="text-sm font-bold tracking-wider text-slate-200 hidden md:block uppercase">Filter Data:</span>
-                        </div>
-                        
-                        <div class="flex flex-wrap sm:flex-nowrap items-center gap-3 w-full lg:flex-1">
-                            <div class="relative flex-1 min-w-[140px]">
-                                <i class="fa-regular fa-calendar absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                                <select id="month-filter" class="w-full bg-slate-800/80 border border-slate-700 text-slate-300 text-xs rounded-lg pl-8 pr-3 py-2.5 appearance-none focus:ring-2 focus:ring-blue-500/50 transition-all">
-                                    <option value="all">Semua Bulan</option>
-                                </select>
-                            </div>
-                            
-                            <div class="relative flex-1 min-w-[140px]">
-                                <input type="date" id="date-filter" class="w-full bg-slate-800/80 border border-slate-700 text-slate-300 text-xs rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500/50 transition-all cursor-pointer">
-                            </div>
-                            
-                            <div class="relative flex-1 min-w-[140px]">
-                                <i class="fa-solid fa-location-dot absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                                <select id="airport-filter" class="w-full bg-slate-800/80 border border-slate-700 text-slate-300 text-xs rounded-lg pl-8 pr-3 py-2.5 appearance-none focus:ring-2 focus:ring-blue-500/50 transition-all">
-                                    <option value="all">Semua Bandara</option>
-                                </select>
-                            </div>
-                            
-                            <div class="relative flex-1 min-w-[140px]">
-                                <i class="fa-solid fa-layer-group absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                                <select id="category-filter" class="w-full bg-slate-800/80 border border-slate-700 text-slate-300 text-xs rounded-lg pl-8 pr-3 py-2.5 appearance-none focus:ring-2 focus:ring-blue-500/50 transition-all">
-                                    <option value="all">Semua Kategori</option>
-                                    <option value="DELAY">Delay</option>
-                                    <option value="CANCEL">Cancel</option>
-                                    <option value="DIVERT">Divert</option>
-                                    <option value="RTB">RTB</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <button id="reset-filters" class="w-full lg:w-auto bg-slate-700/50 hover:bg-slate-700 border border-slate-600 text-slate-300 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-2 shrink-0">
-                            <i class="fa-solid fa-rotate-right"></i>
-                            <span class="lg:hidden xl:inline">Reset</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- KPI Cards -->
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <div class="airport-card kpi-total flex flex-col justify-center relative overflow-hidden group">
-                        <div class="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                            <i class="fa-solid fa-chart-pie text-7xl text-blue-500"></i>
-                        </div>
-                        <span class="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-1 z-10">Total Temuan</span>
-                        <div class="flex items-end gap-2 z-10">
-                            <span class="text-3xl font-black text-white tracking-tight" id="kpi-total">0</span>
-                        </div>
-                    </div>
-                    
-                    <div class="airport-card kpi-delay flex flex-col justify-center relative overflow-hidden group">
-                        <div class="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                            <i class="fa-solid fa-clock text-7xl text-amber-500"></i>
-                        </div>
-                        <span class="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-1 z-10">Delay</span>
-                        <div class="flex items-end gap-2 z-10">
-                            <span class="text-3xl font-black text-amber-400 tracking-tight" id="kpi-delay">0</span>
-                        </div>
-                    </div>
-
-                    <div class="airport-card kpi-cancel flex flex-col justify-center relative overflow-hidden group">
-                        <div class="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                            <i class="fa-solid fa-ban text-7xl text-red-500"></i>
-                        </div>
-                        <span class="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-1 z-10">Cancel</span>
-                        <div class="flex items-end gap-2 z-10">
-                            <span class="text-3xl font-black text-red-400 tracking-tight" id="kpi-cancel">0</span>
-                        </div>
-                    </div>
-
-                    <div class="airport-card kpi-divert flex flex-col justify-center relative overflow-hidden group">
-                        <div class="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                            <i class="fa-solid fa-route text-7xl text-purple-500"></i>
-                        </div>
-                        <span class="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-1 z-10">Divert</span>
-                        <div class="flex items-end gap-2 z-10">
-                            <span class="text-3xl font-black text-purple-400 tracking-tight" id="kpi-divert">0</span>
-                        </div>
-                    </div>
-
-                    <div class="airport-card kpi-rtb flex flex-col justify-center relative overflow-hidden group">
-                        <div class="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                            <i class="fa-solid fa-rotate-left text-7xl text-sky-500"></i>
-                        </div>
-                        <span class="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-1 z-10">Return to Base</span>
-                        <div class="flex items-end gap-2 z-10">
-                            <span class="text-3xl font-black text-sky-400 tracking-tight" id="kpi-rtb">0</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Peak Date Highlight Banner -->
-                <div class="airport-card border border-rose-500/30 bg-gradient-to-r from-rose-900/20 via-[#0F172A] to-[#0F172A] flex flex-col lg:flex-row items-center justify-between gap-6 overflow-hidden relative">
-                    <div class="absolute left-0 top-0 bottom-0 w-1 bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.5)]"></div>
-                    <div class="flex-1 flex flex-col lg:flex-row items-center lg:items-start gap-4 lg:gap-6 z-10">
-                        <div class="bg-rose-500/10 p-3 rounded-xl border border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.15)] flex-shrink-0">
-                            <i class="fa-solid fa-triangle-exclamation text-rose-400 text-2xl"></i>
-                        </div>
-                        <div class="text-center lg:text-left">
-                            <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider mb-1">Puncak Gangguan Operasional (Peak Date)</h3>
-                            <div class="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 mb-2">
-                                <span class="text-2xl lg:text-3xl font-black text-white tracking-tight" id="peak-date-display">-</span>
-                                <span class="px-3 py-1 bg-rose-500/20 border border-rose-500/30 rounded-lg text-rose-300 font-bold text-sm tracking-widest shadow-inner" id="peak-date-count">0 Kejadian</span>
-                            </div>
-                            <p class="text-xs text-slate-400 max-w-2xl leading-relaxed" id="peak-date-redaksi">Menunggu data...</p>
-                        </div>
-                    </div>
-                    <div class="w-full lg:w-auto flex-shrink-0" id="peak-date-breakdown">
-                        <!-- Breakdown badges will be injected here -->
-                    </div>
-                </div>
-                
-                <!-- Main Charts Grid -->
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    
-                    <!-- Trend Chart (Spans 2 columns) -->
-                    <div class="airport-card lg:col-span-2 flex flex-col">
-                        <div class="flex items-center justify-between mb-4">
-                            <div>
-                                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                                    <i class="fa-solid fa-chart-line text-blue-400"></i>
-                                    Tren Kejadian Harian
-                                </h3>
-                                <p class="text-[11px] text-slate-400 font-mono mt-1" id="trend-subtitle">Berdasarkan filter aktif</p>
-                            </div>
-                            <button onclick="downloadChart('trendChart', 'Tren_Kejadian')" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-1.5 rounded" title="Download Grafik">
-                                <i class="fa-solid fa-download"></i>
-                            </button>
-                        </div>
-                        <div class="relative h-[300px] w-full flex-1">
-                            <canvas id="trendChart"></canvas>
-                        </div>
-                        <div class="mt-4 pt-4 border-t border-slate-700/50">
-                            <p id="trend-redaksi" class="text-[11px] text-slate-400 leading-relaxed font-light">Menganalisis pola tren harian...</p>
-                        </div>
-                    </div>
-
-                    <!-- Composition Chart -->
-                    <div class="airport-card flex flex-col">
-                        <div class="flex items-center justify-between mb-2">
-                            <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                                <i class="fa-solid fa-chart-pie text-purple-400"></i>
-                                Komposisi Gangguan
-                            </h3>
-                            <button onclick="downloadChart('compositionChart', 'Komposisi_Gangguan')" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-1.5 rounded" title="Download Grafik">
-                                <i class="fa-solid fa-download"></i>
-                            </button>
-                        </div>
-                        <div class="relative h-[280px] w-full flex-1">
-                            <canvas id="compositionChart"></canvas>
-                        </div>
-                        <div class="mt-4 pt-4 border-t border-slate-700/50">
-                            <p id="composition-redaksi" class="text-[11px] text-slate-400 leading-relaxed font-light">Menghitung rasio komposisi...</p>
-                        </div>
-                    </div>
-
-                    <!-- NEW: Grouped Bar Chart (Spans 3 columns - Side by Side Comparison of Cancel, Delay, Divert, RTB per Airport) -->
-                    <div class="airport-card lg:col-span-3 flex flex-col">
-                        <div class="flex items-center justify-between mb-4">
-                            <div>
-                                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                                    <i class="fa-solid fa-chart-column text-amber-400"></i>
-                                    Perbandingan Rincian Gangguan Antar Bandara (Grouped Side-by-Side)
-                                </h3>
-                                <p class="text-[11px] text-slate-400 font-mono mt-1">Komparasi langsung nilai Cancel, Delay, Divert, dan RTB per stasiun bandara (Top 12 Bandara)</p>
-                            </div>
-                            <button onclick="downloadChart('groupedAirportChart', 'Perbandingan_Rincian_Gangguan_Bandara')" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-1.5 rounded" title="Download Grafik High-Res">
-                                <i class="fa-solid fa-download"></i>
-                            </button>
-                        </div>
-                        <div class="relative h-[380px] w-full flex-1">
-                            <canvas id="groupedAirportChart"></canvas>
-                        </div>
-                        <div class="mt-4 pt-4 border-t border-slate-700/50">
-                            <p id="grouped-airport-redaksi" class="text-[11px] text-slate-400 leading-relaxed font-light">Menganalisis perbandingan berdampingan antar kategori gangguan...</p>
-                        </div>
-                    </div>
-
-                    <!-- Multi Airport Line Chart (Spans 2 columns) -->
-                    <div class="airport-card lg:col-span-2 flex flex-col">
-                        <div class="flex items-center justify-between mb-4">
-                            <div>
-                                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                                    <i class="fa-solid fa-chart-area text-emerald-400"></i>
-                                    Perbandingan Tren Antar Bandara (Top 10)
-                                </h3>
-                                <p class="text-[11px] text-slate-400 font-mono mt-1">Distribusi harian per stasiun</p>
-                            </div>
-                            <button onclick="downloadChart('multiAirportLineChart', 'Perbandingan_Tren_Bandara')" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-1.5 rounded" title="Download Grafik">
-                                <i class="fa-solid fa-download"></i>
-                            </button>
-                        </div>
-                        <div class="relative h-[350px] w-full flex-1">
-                            <canvas id="multiAirportLineChart"></canvas>
-                        </div>
-                        <div class="mt-4 pt-4 border-t border-slate-700/50">
-                            <p id="multi-airport-redaksi" class="text-[11px] text-slate-400 leading-relaxed font-light">Menganalisis perbandingan stasiun...</p>
-                        </div>
-                    </div>
-                    
-                    <!-- Airport Donut Chart -->
-                    <div class="airport-card flex flex-col">
-                        <div class="flex items-center justify-between mb-2">
-                            <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                                <i class="fa-solid fa-map-location-dot text-sky-400"></i>
-                                Bandara Terdampak Utama
-                            </h3>
-                            <button onclick="downloadChart('airportDonutChart', 'Bandara_Terdampak_Utama')" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-1.5 rounded" title="Download Grafik">
-                                <i class="fa-solid fa-download"></i>
-                            </button>
-                        </div>
-                        <div class="relative h-[250px] w-full">
-                            <canvas id="airportDonutChart"></canvas>
-                        </div>
-                        <div class="mt-4 pt-4 border-t border-slate-700/50">
-                            <p id="airport-donut-redaksi" class="text-[11px] text-slate-400 leading-relaxed font-light">Menunggu data untuk Insight Distribusi Bandara Utama...</p>
-                        </div>
-                    </div>
-
-                    <!-- Top Airports Bar Chart (Full Width) -->
-                    <div class="airport-card lg:col-span-3 flex flex-col">
-                        <div class="flex items-center justify-between mb-4">
-                            <div>
-                                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                                    <i class="fa-solid fa-plane-arrival text-amber-400"></i>
-                                    Volume Irregularity Kumulatif per Bandara (Top 20)
-                                </h3>
-                                <p class="text-[11px] text-slate-400 font-mono mt-1">Akumulasi kejadian berdasarkan lokasi stasiun</p>
-                            </div>
-                            <button onclick="downloadChart('airportChart', 'Volume_Irregularity_Bandara')" class="text-slate-400 hover:text-white transition-colors bg-slate-800 p-1.5 rounded" title="Download Grafik">
-                                <i class="fa-solid fa-download"></i>
-                            </button>
-                        </div>
-                        <div class="relative h-[450px] w-full flex-1">
-                            <canvas id="airportChart"></canvas>
-                        </div>
-                        <div class="mt-4 pt-4 border-t border-slate-700/50">
-                            <p id="airport-volume-redaksi" class="text-[11px] text-slate-400 leading-relaxed font-light">Mengidentifikasi titik konsentrasi gangguan...</p>
-                        </div>
-                    </div>
-
-                </div>
-
-                <!-- Interactive Pivot Table -->
-                <div class="airport-card mb-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="flex items-center gap-2">
-                            <i class="fa-solid fa-hand-pointer text-blue-400 animate-pulse"></i>
-                            <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Rekapitulasi Interaktif (Klik Angka Untuk Rincian)</h3>
-                        </div>
-                        <span class="text-xs text-slate-400 font-mono">Tabel Pivot Multi-Dimensi</span>
-                    </div>
-                    <div class="table-container overflow-x-auto border border-slate-700/60 rounded-xl bg-[#0F172A]/50 shadow-inner">
-                        <table class="min-w-full divide-y divide-slate-700/80">
-                            <thead class="sticky top-0 z-10 bg-[#0F172A]">
-                                <tr>
-                                    <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-300">Lokasi / Bandara</th>
-                                    <th scope="col" class="px-5 py-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-amber-400">Delay</th>
-                                    <th scope="col" class="px-5 py-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-red-400">Cancel</th>
-                                    <th scope="col" class="px-5 py-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-purple-400">Divert</th>
-                                    <th scope="col" class="px-5 py-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-sky-400">RTB</th>
-                                    <th scope="col" class="px-5 py-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-white">Total Temuan</th>
-                                </tr>
-                            </thead>
-                            <tbody id="pivot-table-body" class="divide-y divide-slate-800 text-xs text-slate-300">
-                                <!-- Dynamic Pivot Rows -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Data Table Log Preview -->
-                <div class="airport-card">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="flex items-center gap-2">
-                            <i class="fa-solid fa-table-list text-slate-400"></i>
-                            <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Rincian Data Irregularity (50 Data Terakhir)</h3>
-                        </div>
-                        <span class="text-xs text-slate-400 font-mono" id="table-count-label">0 Data Ditampilkan</span>
-                    </div>
-                    <div class="table-container overflow-x-auto max-h-80 border border-slate-700/60 rounded-xl bg-[#0F172A]/50">
-                        <table class="min-w-full divide-y divide-slate-700/80">
-                            <thead class="sticky top-0 z-10">
-                                <tr>
-                                    <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Tanggal Penerbangan</th>
-                                    <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Bandara / Stasiun</th>
-                                    <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">No. Penerbangan</th>
-                                    <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Jenis Irregularity</th>
-                                    <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Keterangan / Remark</th>
-                                </tr>
-                            </thead>
-                            <tbody id="data-table-body" class="divide-y divide-slate-800 text-xs text-slate-300">
-                                <!-- Dynamic Rows -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-            </div> <!-- End Dashboard Content -->
-        </div>
-    </main>
-
-    <!-- Detail Modal (Pop-up) -->
-    <div id="detail-modal" class="fixed inset-0 z-[100] hidden flex items-center justify-center bg-[#0B1120]/80 backdrop-blur-sm p-4 transition-opacity">
-        <div class="bg-[#0F172A] border border-blue-500/40 rounded-2xl w-full max-w-5xl shadow-[0_0_50px_rgba(59,130,246,0.2)] flex flex-col max-h-[90vh] transform transition-transform scale-95" id="modal-content-box">
-            <div class="flex justify-between items-center p-5 border-b border-slate-700/80 bg-slate-800/40 rounded-t-2xl">
-                <div class="flex items-center gap-3">
-                    <div class="bg-blue-500/20 p-2.5 rounded-lg border border-blue-500/40 shadow-[0_0_10px_rgba(59,130,246,0.2)]">
-                        <i class="fa-solid fa-list-check text-blue-400 text-lg"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-lg font-bold text-slate-100 tracking-wide" id="modal-title">Rincian Data Temuan</h3>
-                        <p class="text-xs text-slate-400 font-mono" id="modal-subtitle">Filter aktif</p>
-                    </div>
-                </div>
-                <button onclick="closeModal()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 p-2 rounded-lg transition-colors border border-slate-700 shadow-sm">
-                    <i class="fa-solid fa-xmark text-lg px-1"></i>
+                <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="mt-4 bg-cyan-600/20 text-cyan-400 hover:bg-cyan-500/30 border border-cyan-500/30 px-6 py-3 rounded-xl font-semibold transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(6,182,212,0.15)]"
+                >
+                    <UploadCloud className="w-5 h-5" />
+                    Inisialisasi Data
                 </button>
             </div>
-            <div class="p-5 overflow-y-auto flex-1 table-container">
-                <table class="min-w-full divide-y divide-slate-700/80">
-                    <thead class="sticky top-0 z-10 bg-[#0F172A]">
-                        <tr>
-                            <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">Tanggal</th>
-                            <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">Bandara</th>
-                            <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">No. Penerbangan</th>
-                            <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">Jenis</th>
-                            <th scope="col" class="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">Keterangan</th>
-                        </tr>
-                    </thead>
-                    <tbody id="modal-table-body" class="divide-y divide-slate-800 text-xs text-slate-300">
-                        <!-- Populated dynamically -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
+        )}
 
-    <script>
-        // Global Data Variables
-        let rawData = [];
-        let filteredData = [];
-        
-        // Active Chart Instances
-        let trendChartInstance = null;
-        let compositionChartInstance = null;
-        let airportChartInstance = null;
-        let groupedAirportChartInstance = null; // New chart instance
-        let multiAirportLineChartInstance = null;
-        let airportDonutChartInstance = null;
-
-        // HIGH-RESOLUTION CRISP RENDERING (PREVENTS BLURRY CHARTS ON ALL DISPLAYS)
-        // Dynamically scale pixel ratio based on screen devicePixelRatio or default to min 2.5x
-        const customPixelRatio = Math.max(window.devicePixelRatio || 1, 2.5);
-        Chart.defaults.devicePixelRatio = customPixelRatio;
-
-        // Custom Plugin for Doughnut Leader Lines
-        const doughnutPointer = {
-            id: 'doughnutPointer',
-            afterDraw(chart) {
-                if (chart.config.type !== 'doughnut') return;
-                const ctx = chart.ctx;
-                chart.data.datasets.forEach((dataset, i) => {
-                    const meta = chart.getDatasetMeta(i);
-                    meta.data.forEach((element, index) => {
-                        const data = dataset.data[index];
-                        let sum = dataset.data.reduce((a, b) => a + b, 0);
-                        if (data === 0 || sum === 0) return;
-                        let percentage = (data * 100 / sum);
-                        if (percentage < 4) return;
-
-                        const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2;
-                        const r = element.outerRadius;
-                        
-                        const edgeX = element.x + Math.cos(midAngle) * r;
-                        const edgeY = element.y + Math.sin(midAngle) * r;
-                        
-                        const lineLength = 15;
-                        const targetX = element.x + Math.cos(midAngle) * (r + lineLength);
-                        const targetY = element.y + Math.sin(midAngle) * (r + lineLength);
-
-                        ctx.save();
-                        ctx.beginPath();
-                        ctx.moveTo(edgeX, edgeY);
-                        ctx.lineTo(targetX, targetY);
-                        ctx.strokeStyle = dataset.borderColor || '#64748b';
-                        ctx.lineWidth = 1.5;
-                        ctx.stroke();
-                        
-                        ctx.beginPath();
-                        ctx.arc(targetX, targetY, 2.5, 0, 2 * Math.PI);
-                        ctx.fillStyle = ctx.strokeStyle;
-                        ctx.fill();
-                        ctx.restore();
-                    });
-                });
-            }
-        };
-        Chart.register(doughnutPointer);
-
-        // Global Chart styling defaults
-        Chart.defaults.font.family = "'Inter', sans-serif";
-        Chart.defaults.font.size = 12;
-        Chart.defaults.color = '#CBD5E1';
-
-        // Specific colors for Irregularity Types
-        const chartColors = {
-            DELAY: '#FBBF24',  // Amber
-            CANCEL: '#F87171', // Red
-            DIVERT: '#A78BFA', // Violet
-            RTB: '#38BDF8'     // Sky blue
-        };
-
-        // Glowing neon colors for futuristic bar charts
-        const chartColorsGlow = {
-            DELAY: 'rgba(251, 191, 36, 0.25)',
-            CANCEL: 'rgba(248, 113, 113, 0.25)',
-            DIVERT: 'rgba(167, 139, 250, 0.25)',
-            RTB: 'rgba(56, 189, 248, 0.25)'
-        };
-        
-        const gridConfig = { 
-            color: 'rgba(51, 65, 85, 0.25)', 
-            drawBorder: false,
-            borderDash: [5, 5] // Modern dashed grid
-        };
-
-        // Flexible Excel Column Mapping
-        const COLUMN_MAPPINGS = {
-            date: ['date', 'tanggal', 'flight date', 'tgl', 'date of flight', 'flt_date'],
-            airport: ['airport', 'bandara', 'station', 'stn', 'origin', 'dest', 'loc', 'lokasi'],
-            flightNo: ['flight no', 'flight', 'flt no', 'nomor penerbangan', 'flt', 'no penerbangan', 'flt_no'],
-            type: ['type', 'jenis', 'irregularity type', 'status', 'category', 'jenis irregularity', 'irreg_type'],
-            remark: ['remark', 'reason', 'keterangan', 'delay reason', 'alasan', 'remarks', 'dampak']
-        };
-
-        const IRREG_TYPES = {
-            DELAY: ['delay', 'dly'],
-            CANCEL: ['cancel', 'cancellation', 'cnl', 'batal'],
-            DIVERT: ['divert', 'diversion', 'dvt', 'pengalihan'],
-            RTB: ['rtb', 'return to base', 'kembali ke bandara asal']
-        };
-
-        // UI Elements
-        const fileInput = document.getElementById('excel-file');
-        const uploadSection = document.getElementById('upload-section');
-        const loadingOverlay = document.getElementById('loading-overlay');
-        const dashboardContent = document.getElementById('dashboard-content');
-        const lastUpdated = document.getElementById('last-updated');
-        const headerUploadBtn = document.getElementById('header-upload-btn');
-        
-        // Filter Elements
-        const monthFilter = document.getElementById('month-filter');
-        const dateFilter = document.getElementById('date-filter');
-        const airportFilter = document.getElementById('airport-filter');
-        const categoryFilter = document.getElementById('category-filter');
-        const resetBtn = document.getElementById('reset-filters');
-
-        function triggerFileInput() {
-            fileInput.value = '';
-            fileInput.click();
-        }
-
-        headerUploadBtn.addEventListener('click', triggerFileInput);
-        fileInput.addEventListener('change', handleFileUpload);
-
-        monthFilter.addEventListener('change', () => { dateFilter.value = ''; updateDashboard(); });
-        dateFilter.addEventListener('change', () => { monthFilter.value = 'all'; updateDashboard(); });
-        airportFilter.addEventListener('change', updateDashboard);
-        categoryFilter.addEventListener('change', updateDashboard);
-        resetBtn.addEventListener('click', resetFilters);
-
-        function handleFileUpload(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            loadingOverlay.classList.remove('hidden');
-
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-                try {
-                    const data = new Uint8Array(evt.target.result);
-                    const workbook = XLSX.read(data, {type: 'array', cellDates: true});
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const json = XLSX.utils.sheet_to_json(worksheet, {raw: false, dateNF: 'yyyy-mm-dd'});
-                    
-                    processExcelData(json, file.name);
-                } catch (error) {
-                    console.error("Error parsing Excel:", error);
-                    alert("Gagal membaca file Excel. Pastikan format file sesuai (.xlsx atau .csv).");
-                } finally {
-                    loadingOverlay.classList.add('hidden');
-                }
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        function findColumnName(keys, possibleNames) {
-            for (let possibleName of possibleNames) {
-                const match = keys.find(k => k.toLowerCase().trim().includes(possibleName));
-                if (match) return match;
-            }
-            return null;
-        }
-
-        function normalizeType(rawType) {
-            if (!rawType) return 'OTHER';
-            const lowerType = String(rawType).toLowerCase().trim();
-            for (const [standardType, variants] of Object.entries(IRREG_TYPES)) {
-                if (variants.some(v => lowerType.includes(v))) {
-                    return standardType;
-                }
-            }
-            return 'OTHER';
-        }
-
-        function formatDateIndonesia(dateStr) {
-            if (!dateStr || dateStr === '-') return '-';
-            try {
-                const parts = dateStr.split('-');
-                if (parts.length === 3) {
-                    const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
-                    return dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'Long', year: 'numeric' });
-                }
-            } catch (e) {}
-            return dateStr;
-        }
-
-        function processExcelData(jsonArray, fileName) {
-            if (!jsonArray || jsonArray.length === 0) {
-                alert("File Excel yang Anda unggah kosong.");
-                return;
-            }
-
-            const sampleRow = jsonArray[0];
-            const keys = Object.keys(sampleRow);
-
-            const dateCol = findColumnName(keys, COLUMN_MAPPINGS.date);
-            const airportCol = findColumnName(keys, COLUMN_MAPPINGS.airport);
-            const typeCol = findColumnName(keys, COLUMN_MAPPINGS.type);
-            const flightNoCol = findColumnName(keys, COLUMN_MAPPINGS.flightNo);
-            const remarkCol = findColumnName(keys, COLUMN_MAPPINGS.remark);
-
-            if (!dateCol || !airportCol || !typeCol) {
-                let msg = "Kolom yang dibutuhkan tidak terdeteksi pada file Excel.\n";
-                msg += `Headers ditemukan: ${keys.join(', ')}\n\n`;
-                msg += `Kolom wajib: Tanggal, Bandara, dan Jenis Irregularity.`;
-                alert(msg);
-                return;
-            }
-
-            rawData = jsonArray.map(row => {
-                let parsedDate = null;
-                let monthName = null;
-                if (row[dateCol]) {
-                    let d = new Date(row[dateCol]);
-                    if (!isNaN(d)) {
-                        parsedDate = d.toISOString().split('T')[0]; 
-                        monthName = d.toLocaleString('id-ID', { month: 'short', year: 'numeric' }).toUpperCase();
-                    }
-                }
-
-                return {
-                    date: parsedDate || row[dateCol],
-                    month: monthName || 'LAINNYA',
-                    airport: String(row[airportCol] || 'LAINNYA').toUpperCase().trim(),
-                    rawType: row[typeCol],
-                    type: normalizeType(row[typeCol]),
-                    flightNo: row[flightNoCol] || '-',
-                    remark: row[remarkCol] || '-'
-                };
-            }).filter(item => item.date && item.type !== 'OTHER'); 
-
-            if (rawData.length === 0) {
-                alert("Tidak ditemukan baris data irregularity penerbangan yang valid.");
-                return;
-            }
-
-            initializeFilters();
-            
-            uploadSection.classList.add('hidden');
-            dashboardContent.classList.remove('hidden');
-            headerUploadBtn.classList.remove('hidden');
-            
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-            lastUpdated.innerHTML = `File: <span class="text-blue-400 font-semibold">${fileName}</span> (${timeStr})`;
-
-            updateDashboard();
-        }
-
-        function initializeFilters() {
-            const months = [...new Set(rawData.map(item => item.month))].sort((a, b) => new Date(a) - new Date(b));
-            
-            monthFilter.innerHTML = '<option value="all">Semua Bulan</option>';
-            months.forEach(m => {
-                if(m !== 'LAINNYA') monthFilter.innerHTML += `<option value="${m}">${m}</option>`;
-            });
-
-            const airports = [...new Set(rawData.map(item => item.airport))].sort();
-            airportFilter.innerHTML = '<option value="all">Semua Bandara</option>';
-            airports.forEach(a => {
-                airportFilter.innerHTML += `<option value="${a}">${a}</option>`;
-            });
-        }
-
-        function resetFilters() {
-            monthFilter.value = 'all';
-            dateFilter.value = '';
-            airportFilter.value = 'all';
-            categoryFilter.value = 'all';
-            updateDashboard();
-        }
-
-        function updateDashboard() {
-            const selectedMonth = monthFilter.value;
-            const selectedDate = dateFilter.value;
-            const selectedAirport = airportFilter.value;
-            const selectedCategory = categoryFilter.value;
-
-            filteredData = rawData.filter(item => {
-                let matchMonth = true, matchDate = true, matchAirport = true, matchCategory = true;
-                if (selectedDate) matchDate = item.date === selectedDate;
-                else if (selectedMonth !== 'all') matchMonth = item.month === selectedMonth;
-                if (selectedAirport !== 'all') matchAirport = item.airport === selectedAirport;
-                if (selectedCategory !== 'all') matchCategory = item.type === selectedCategory;
-                return matchMonth && matchDate && matchAirport && matchCategory;
-            });
-
-            // Update Subtitle Trend
-            const trendSub = document.getElementById('trend-subtitle');
-            if (selectedAirport !== 'all') {
-                trendSub.innerText = `Bandara: ${selectedAirport}`;
-            } else {
-                trendSub.innerText = `Semua Bandara (${filteredData.length} Data)`;
-            }
-
-            updateKPIs();
-            updatePeakDateAndAnalysis();
-            updateCharts();
-            updateTable();
-            renderPivotTable();
-        }
-
-        function updateKPIs() {
-            let delays = 0, cancels = 0, diverts = 0, rtbs = 0;
-            filteredData.forEach(item => {
-                if (item.type === 'DELAY') delays++;
-                else if (item.type === 'CANCEL') cancels++;
-                else if (item.type === 'DIVERT') diverts++;
-                else if (item.type === 'RTB') rtbs++;
-            });
-
-            const totalKejadian = delays + cancels + diverts + rtbs;
-
-            document.getElementById('kpi-total').innerText = totalKejadian.toLocaleString('id-ID');
-            document.getElementById('kpi-delay').innerText = delays.toLocaleString('id-ID');
-            document.getElementById('kpi-cancel').innerText = cancels.toLocaleString('id-ID');
-            document.getElementById('kpi-divert').innerText = diverts.toLocaleString('id-ID');
-            document.getElementById('kpi-rtb').innerText = rtbs.toLocaleString('id-ID');
-        }
-
-        function updatePeakDateAndAnalysis() {
-            const peakDisplay = document.getElementById('peak-date-display');
-            const peakCount = document.getElementById('peak-date-count');
-            const peakRedaksi = document.getElementById('peak-date-redaksi');
-            const peakBreakdown = document.getElementById('peak-date-breakdown');
-
-            if (filteredData.length === 0) {
-                peakDisplay.innerText = "Tidak Ada Data";
-                peakCount.innerText = "0 Kejadian";
-                peakRedaksi.innerText = "Tidak ada data irregularity yang cocok dengan filter yang dipilih saat ini.";
-                peakBreakdown.innerHTML = '';
-                return;
-            }
-
-            const dateMap = {};
-            filteredData.forEach(item => {
-                if (!dateMap[item.date]) {
-                    dateMap[item.date] = { total: 0, DELAY: 0, CANCEL: 0, DIVERT: 0, RTB: 0, airports: {} };
-                }
-                dateMap[item.date].total++;
-                dateMap[item.date][item.type]++;
-                dateMap[item.date].airports[item.airport] = (dateMap[item.date].airports[item.airport] || 0) + 1;
-            });
-
-            let peakDate = null;
-            let maxTotal = -1;
-
-            Object.keys(dateMap).forEach(d => {
-                if (dateMap[d].total > maxTotal) {
-                    maxTotal = dateMap[d].total;
-                    peakDate = d;
-                }
-            });
-
-            if (!peakDate) return;
-
-            const peakData = dateMap[peakDate];
-            const formattedPeakDate = formatDateIndonesia(peakDate);
-            const peakPercentage = ((maxTotal / filteredData.length) * 100).toFixed(1);
-
-            const sortedPeakAirports = Object.entries(peakData.airports).sort((a, b) => b[1] - a[1]);
-            const topPeakAirport = sortedPeakAirports[0] ? sortedPeakAirports[0][0] : 'Seluruh Bandara';
-            const topPeakAirportCount = sortedPeakAirports[0] ? sortedPeakAirports[0][1] : 0;
-
-            const typeCounts = [
-                { name: 'Delay', val: peakData.DELAY, color: 'text-amber-400' },
-                { name: 'Cancel', val: peakData.CANCEL, color: 'text-red-400' },
-                { name: 'Divert', val: peakData.DIVERT, color: 'text-purple-400' },
-                { name: 'RTB', val: peakData.RTB, color: 'text-sky-400' }
-            ].sort((a, b) => b.val - a.val);
-
-            const dominantType = typeCounts[0];
-
-            peakDisplay.innerText = formattedPeakDate;
-            peakCount.innerText = `${maxTotal} Kejadian (${peakPercentage}% dari filter saat ini)`;
-
-            peakRedaksi.innerHTML = `
-                Puncak frekuensi gangguan operasional penerbangan tertinggi terjadi pada tanggal 
-                <strong class="text-white font-semibold">${formattedPeakDate}</strong> dengan total <strong class="text-rose-400 font-bold">${maxTotal} kejadian</strong>. 
-                Kejadian pada hari ini didominasi oleh ketidaklancaran jenis <strong class="text-white font-semibold">${dominantType.name}</strong> (${dominantType.val} kejadian). 
-                Stasiun / Bandara yang mencatatkan insiden terbanyak pada tanggal ini adalah <strong class="text-blue-300 font-semibold">${topPeakAirport}</strong> dengan <strong class="text-white">${topPeakAirportCount} kasus</strong>. 
-                Disarankan untuk mengevaluasi kronologi operasional dan kendala cuaca/teknis pada tanggal tersebut.
-            `;
-
-            peakBreakdown.innerHTML = `
-                <div class="text-[11px] font-mono text-slate-400 mb-1 block w-full text-left lg:text-right">Rincian Tanggal Puncak:</div>
-                <div class="flex flex-wrap gap-1.5 justify-start lg:justify-end">
-                    <span class="px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono text-[11px]">
-                        <strong>${peakData.DELAY}</strong> Delay
-                    </span>
-                    <span class="px-2.5 py-1 rounded-md bg-red-500/10 border border-red-500/30 text-red-300 font-mono text-[11px]">
-                        <strong>${peakData.CANCEL}</strong> Cancel
-                    </span>
-                    <span class="px-2.5 py-1 rounded-md bg-purple-500/10 border border-purple-500/30 text-purple-300 font-mono text-[11px]">
-                        <strong>${peakData.DIVERT}</strong> Divert
-                    </span>
-                    <span class="px-2.5 py-1 rounded-md bg-sky-500/10 border border-sky-500/30 text-sky-300 font-mono text-[11px]">
-                        <strong>${peakData.RTB}</strong> RTB
-                    </span>
+        {}
+        {!loading && data.length > 0 && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                
+                {/* KPI Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[
+                        { title: 'Total Keseluruhan Data', val: totalRecords, icon: <Activity className="w-6 h-6 text-cyan-400" />, color: 'from-cyan-500/20 to-transparent', border: 'border-cyan-500/30' },
+                        { title: 'Total Bandara Terdampak', val: airports.length, icon: <MapPin className="w-6 h-6 text-emerald-400" />, color: 'from-emerald-500/20 to-transparent', border: 'border-emerald-500/30' },
+                        { title: 'Frekuensi Tertinggi', val: highestAirport, icon: <BarChart3 className="w-6 h-6 text-orange-400" />, color: 'from-orange-500/20 to-transparent', border: 'border-orange-500/30' },
+                        { title: 'Dominasi Gangguan', val: mostFrequentType, icon: <ShieldAlert className="w-6 h-6 text-pink-400" />, color: 'from-pink-500/20 to-transparent', border: 'border-pink-500/30' }
+                    ].map((card, i) => (
+                        <div key={i} className={`bg-[#111827]/80 backdrop-blur-md rounded-2xl p-5 border ${card.border} shadow-lg relative overflow-hidden group`}>
+                            <div className={`absolute inset-0 bg-gradient-to-br ${card.color} opacity-50 group-hover:opacity-100 transition-opacity duration-500`}></div>
+                            <div className="relative z-10 flex items-center gap-4">
+                                <div className="p-3 bg-slate-800/80 rounded-xl shadow-inner border border-slate-700/50">
+                                    {card.icon}
+                                </div>
+                                <div>
+                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{card.title}</p>
+                                    <p className="text-2xl font-bold text-white mt-1 drop-shadow-sm">{card.val}</p>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
-            `;
 
-            updateAllChartRedaksis(dateMap, peakDate, maxTotal);
-        }
+                {/* 3. Trend Time Series - Full Width */}
+                <div className="bg-[#111827]/80 backdrop-blur-md rounded-2xl p-6 border border-slate-800 shadow-xl flex flex-col h-[400px]">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-blue-500/20 rounded-lg border border-blue-500/30">
+                                <TrendingUp className="w-5 h-5 text-blue-400" />
+                            </div>
+                            <h2 className="text-lg font-bold text-slate-100 tracking-wide">3. TREND GANGGUAN HARIAN & BULANAN {selectedAirport !== 'All' ? `(${selectedAirport})` : ''}</h2>
+                        </div>
+                        <div className="flex bg-[#1e293b] rounded-lg p-1 border border-slate-700 shadow-inner">
+                            <button
+                                onClick={() => setTimeView('daily')}
+                                className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${timeView === 'daily' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+                            >Harian</button>
+                            <button
+                                onClick={() => setTimeView('monthly')}
+                                className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${timeView === 'monthly' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+                            >Bulanan</button>
+                        </div>
+                    </div>
+                    <div className="flex-1 w-full min-h-0">
+                        {trendData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                    <defs>
+                                        <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.4}/>
+                                            <stop offset="95%" stopColor="#38bdf8" stopOpacity={0}/>
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.5} />
+                                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                                    <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#475569', strokeWidth: 1, strokeDasharray: '4 4' }} />
+                                    <Area type="monotone" dataKey="total" name="Total Insiden" stroke="#38bdf8" strokeWidth={3} fillOpacity={1} fill="url(#colorTrend)" activeDot={{ r: 6, fill: '#38bdf8', stroke: '#fff', strokeWidth: 2, shadow: '0 0 10px #38bdf8' }}>
+                                        <LabelList dataKey="total" position="top" fill="#94a3b8" fontSize={11} fontWeight="bold" offset={8} />
+                                    </Area>
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        ) : (<div className="h-full flex items-center justify-center text-slate-500">Tidak ada data</div>)}
+                    </div>
+                </div>
 
-        function updateAllChartRedaksis(dateMap, peakDate, maxTotal) {
-            const activeDays = Object.keys(dateMap).length;
-            const avgDaily = activeDays > 0 ? (filteredData.length / activeDays).toFixed(1) : 0;
-            const formattedPeakDate = formatDateIndonesia(peakDate);
-
-            document.getElementById('trend-redaksi').innerHTML = `
-                Grafik menunjukkan fluktuasi riil harian dari seluruh kategori insiden. Rata-rata kejadian per hari tercatat sebanyak 
-                <strong class="text-blue-300">${avgDaily} kejadian/hari</strong> dari total <strong class="text-white">${activeDays} hari operasional</strong> yang teridentifikasi. 
-                Lonjakan paling signifikan tercatat pada <strong class="text-rose-400">${formattedPeakDate}</strong> (${maxTotal} kejadian).
-            `;
-
-            const aptCounts = {};
-            filteredData.forEach(item => aptCounts[item.airport] = (aptCounts[item.airport] || 0) + 1);
-            const topAirportsList = Object.keys(aptCounts).sort((a,b) => aptCounts[b] - aptCounts[a]);
-            const a1 = topAirportsList[0] || '-';
-            const a2 = topAirportsList[1] || '-';
-
-            document.getElementById('multi-airport-redaksi').innerHTML = `
-                Perbandingan pergerakan tren harian mengidentifikasi bahwa Bandara <strong class="text-emerald-300">${a1}</strong> (${aptCounts[a1] || 0} total gangguan) 
-                dan <strong class="text-emerald-300">${a2}</strong> (${aptCounts[a2] || 0} total gangguan) memiliki variabilitas grafik tertinggi.
-            `;
-
-            // Grouped Airport Bar Narrative
-            document.getElementById('grouped-airport-redaksi').innerHTML = `
-                Grafik batang berdampingan (grouped bar chart) di atas menyandingkan secara langsung tingkat keparahan antar jenis gangguan per stasiun. 
-                Melalui komparasi ini, Anda dapat membandingkan rasio <strong class="text-amber-400">Delay</strong>, <strong class="text-red-400">Cancel</strong>, <strong class="text-purple-400">Divert</strong>, dan <strong class="text-sky-400">RTB</strong> secara presisi di setiap bandara utama.
-            `;
-
-            const totalEvents = filteredData.length;
-            const a1Percent = totalEvents > 0 ? (((aptCounts[a1] || 0) / totalEvents) * 100).toFixed(1) : 0;
-            const top3Sum = topAirportsList.slice(0, 3).reduce((sum, apt) => sum + (aptCounts[apt] || 0), 0);
-            const top3Percent = totalEvents > 0 ? ((top3Sum / totalEvents) * 100).toFixed(1) : 0;
-
-            document.getElementById('airport-volume-redaksi').innerHTML = `
-                Bandara <strong class="text-amber-300">${a1}</strong> menduduki peringkat teratas lokasi dampak gangguan dengan menyumbang <strong class="text-white">${aptCounts[a1] || 0} insiden</strong> (${a1Percent}% dari total data). 
-                Secara kumulatif, 3 bandara teratas (<strong class="text-slate-200">${topAirportsList.slice(0,3).join(', ')}</strong>) berkontribusi sebesar <strong class="text-amber-400">${top3Percent}%</strong>.
-            `;
-
-            const typeCounts = { DELAY: 0, CANCEL: 0, DIVERT: 0, RTB: 0 };
-            filteredData.forEach(i => typeCounts[i.type]++);
-            const sortedTypes = Object.entries(typeCounts).sort((a,b) => b[1] - a[1]);
-            const t1 = sortedTypes[0];
-            const t2 = sortedTypes[1];
-            const t1P = totalEvents > 0 ? ((t1[1] / totalEvents) * 100).toFixed(1) : 0;
-
-            document.getElementById('composition-redaksi').innerHTML = `
-                Komposisi ketidakberangkatan didominasi oleh jenis <strong class="text-purple-300">${t1[0]}</strong> sebesar <strong class="text-white">${t1P}%</strong> (${t1[1]} kasus), 
-                kemudian diikuti oleh <strong class="text-slate-200">${t2[0]}</strong> (${t2[1]} kasus).
-            `;
-
-            const top5Sum = topAirportsList.slice(0, 5).reduce((sum, apt) => sum + (aptCounts[apt] || 0), 0);
-            const top5P = totalEvents > 0 ? ((top5Sum / totalEvents) * 100).toFixed(1) : 0;
-
-            document.getElementById('airport-donut-redaksi').innerHTML = `
-                Distribusi gangguan terpusat di 5 bandara utama yang menguasai <strong class="text-sky-300">${top5P}%</strong> dari total keseluruhan insiden.
-            `;
-        }
-
-        function updateCharts() {
-            renderCompositionChart();
-            renderTrendChart();
-            renderGroupedAirportChart(); // NEW BAR CHART METHOD
-            renderAirportChart();
-            renderMultiAirportLineChart();
-            renderAirportDonutChart();
-        }
-
-        function renderCompositionChart() {
-            const ctx = document.getElementById('compositionChart').getContext('2d');
-            const counts = { DELAY: 0, CANCEL: 0, DIVERT: 0, RTB: 0 };
-            filteredData.forEach(item => counts[item.type]++);
-            
-            const data = [counts.DELAY, counts.CANCEL, counts.DIVERT, counts.RTB];
-            const labels = ['Delay', 'Cancel', 'Divert', 'RTB'];
-            const bgColors = [chartColors.DELAY, chartColors.CANCEL, chartColors.DIVERT, chartColors.RTB];
-
-            if (compositionChartInstance) compositionChartInstance.destroy();
-
-            compositionChartInstance = new Chart(ctx, {
-                type: 'doughnut',
-                plugins: [ChartDataLabels],
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: bgColors,
-                        borderWidth: 3,
-                        borderColor: '#1E293B',
-                        hoverOffset: 8
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    layout: { padding: { top: 25, bottom: 25, left: 35, right: 35 } },
-                    plugins: {
-                        legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, boxWidth: 8, color: '#F1F5F9', font: {size: 12} } },
-                        tooltip: {
-                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                            titleColor: '#F8FAFC',
-                            bodyColor: '#CBD5E1',
-                            borderColor: 'rgba(255, 255, 255, 0.1)',
-                            borderWidth: 1,
-                            padding: 10,
-                            cornerRadius: 8,
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.label || '';
-                                    if (label) label += ': ';
-                                    if (context.parsed !== null) {
-                                        let total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                        let percentage = total > 0 ? ((context.parsed / total) * 100).toFixed(1) + '%' : '0%';
-                                        label += context.parsed.toLocaleString('id-ID') + ' (' + percentage + ')';
-                                    }
-                                    return label;
-                                }
-                            }
-                        },
-                        datalabels: {
-                            color: '#FFFFFF',
-                            anchor: 'end',
-                            align: 'end',
-                            offset: 15,
-                            backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                            borderColor: 'rgba(255, 255, 255, 0.15)',
-                            borderWidth: 1,
-                            borderRadius: 4,
-                            padding: 5,
-                            font: { family: "'Inter'", weight: 'bold', size: 12 },
-                            formatter: (value, ctx) => {
-                                let sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
-                                if (value === 0 || sum === 0) return null;
-                                let percentage = (value * 100 / sum);
-                                if (percentage < 5) return null; 
-                                return value + " (" + percentage.toFixed(0) + "%)";
-                            }
-                        }
-                    },
-                    cutout: '68%'
-                }
-            });
-        }
-
-        function renderTrendChart() {
-            const ctx = document.getElementById('trendChart').getContext('2d');
-            const dateMap = {};
-            filteredData.forEach(item => {
-                if(!dateMap[item.date]) dateMap[item.date] = { DELAY: 0, CANCEL: 0, DIVERT: 0, RTB: 0 };
-                dateMap[item.date][item.type]++;
-            });
-
-            const sortedDates = Object.keys(dateMap).sort();
-            const datasets = [
-                { label: 'Delay', data: [], backgroundColor: chartColorsGlow.DELAY, borderColor: chartColors.DELAY, borderWidth: 2 },
-                { label: 'Cancel', data: [], backgroundColor: chartColorsGlow.CANCEL, borderColor: chartColors.CANCEL, borderWidth: 2 },
-                { label: 'Divert', data: [], backgroundColor: chartColorsGlow.DIVERT, borderColor: chartColors.DIVERT, borderWidth: 2 },
-                { label: 'RTB', data: [], backgroundColor: chartColorsGlow.RTB, borderColor: chartColors.RTB, borderWidth: 2 }
-            ];
-
-            sortedDates.forEach(date => {
-                datasets[0].data.push(dateMap[date].DELAY);
-                datasets[1].data.push(dateMap[date].CANCEL);
-                datasets[2].data.push(dateMap[date].DIVERT);
-                datasets[3].data.push(dateMap[date].RTB);
-            });
-
-            datasets.forEach(ds => {
-                ds.borderRadius = { topLeft: 6, topRight: 6 };
-                ds.borderSkipped = false;
-                ds.barPercentage = 0.6;
-            });
-
-            if (trendChartInstance) trendChartInstance.destroy();
-
-            trendChartInstance = new Chart(ctx, {
-                type: 'bar',
-                plugins: [ChartDataLabels],
-                data: { labels: sortedDates, datasets: datasets },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    scales: {
-                        x: { stacked: true, grid: { display: false }, ticks: { color: '#E2E8F0', font: {size: 11} } },
-                        y: { stacked: true, beginAtZero: true, grid: gridConfig, border: {display: false}, ticks: { color: '#E2E8F0', font: {size: 11} } }
-                    },
-                    plugins: {
-                        legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8, color: '#F1F5F9', font: {size: 12} } },
-                        datalabels: {
-                            color: '#FFFFFF',
-                            textShadowColor: 'rgba(0, 0, 0, 0.9)',
-                            textShadowBlur: 4,
-                            font: { family: "'Inter'", weight: 'bold', size: 11 },
-                            formatter: (value) => value > 0 ? value : null,
-                            anchor: 'center',
-                            align: 'center'
-                        }
-                    }
-                }
-            });
-        }
-
-        // NEW CHART FUNCTION: Grouped Bar Chart comparing Delay, Cancel, Divert, RTB side-by-side per Airport
-        function renderGroupedAirportChart() {
-            const ctx = document.getElementById('groupedAirportChart').getContext('2d');
-            
-            const aptMap = {};
-            filteredData.forEach(item => {
-                if(!aptMap[item.airport]) aptMap[item.airport] = { total: 0, DELAY: 0, CANCEL: 0, DIVERT: 0, RTB: 0 };
-                aptMap[item.airport].total++;
-                aptMap[item.airport][item.type]++;
-            });
-
-            const sortedAirports = Object.keys(aptMap).sort((a, b) => aptMap[b].total - aptMap[a].total);
-            const topAirports = sortedAirports.slice(0, 12); // Display top 12 bandara for clear side-by-side view
-
-            const datasets = [
-                { label: 'Delay', data: [], backgroundColor: chartColors.DELAY, borderColor: '#1E293B', borderWidth: 1, borderRadius: 4 },
-                { label: 'Cancel', data: [], backgroundColor: chartColors.CANCEL, borderColor: '#1E293B', borderWidth: 1, borderRadius: 4 },
-                { label: 'Divert', data: [], backgroundColor: chartColors.DIVERT, borderColor: '#1E293B', borderWidth: 1, borderRadius: 4 },
-                { label: 'RTB', data: [], backgroundColor: chartColors.RTB, borderColor: '#1E293B', borderWidth: 1, borderRadius: 4 }
-            ];
-
-            topAirports.forEach(apt => {
-                datasets[0].data.push(aptMap[apt].DELAY);
-                datasets[1].data.push(aptMap[apt].CANCEL);
-                datasets[2].data.push(aptMap[apt].DIVERT);
-                datasets[3].data.push(aptMap[apt].RTB);
-            });
-
-            if (groupedAirportChartInstance) groupedAirportChartInstance.destroy();
-
-            groupedAirportChartInstance = new Chart(ctx, {
-                type: 'bar',
-                plugins: [ChartDataLabels],
-                data: { 
-                    labels: topAirports, 
-                    datasets: datasets 
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { 
-                            stacked: false, 
-                            grid: { display: false }, 
-                            ticks: { color: '#F1F5F9', font: { family: 'monospace', size: 11, weight: 'bold' } } 
-                        },
-                        y: { 
-                            stacked: false, 
-                            beginAtZero: true, 
-                            grid: gridConfig, 
-                            border: { display: false }, 
-                            ticks: { color: '#E2E8F0', font: { size: 11 } } 
-                        }
-                    },
-                    plugins: {
-                        legend: { 
-                            position: 'top', 
-                            align: 'end', 
-                            labels: { usePointStyle: true, boxWidth: 10, color: '#F1F5F9', font: { size: 12 } } 
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                            titleColor: '#F8FAFC',
-                            bodyColor: '#CBD5E1',
-                            borderColor: 'rgba(255, 255, 255, 0.1)',
-                            borderWidth: 1,
-                            padding: 10,
-                            cornerRadius: 8
-                        },
-                        datalabels: {
-                            color: '#FFFFFF',
-                            textShadowColor: 'rgba(0, 0, 0, 0.9)',
-                            textShadowBlur: 4,
-                            font: { family: "'Inter'", weight: 'bold', size: 10 },
-                            formatter: (value) => value > 0 ? value : null,
-                            anchor: 'end',
-                            align: 'top',
-                            offset: 2
-                        }
-                    }
-                }
-            });
-        }
-
-        function renderAirportChart() {
-             const ctx = document.getElementById('airportChart').getContext('2d');
-             const aptMap = {};
-             filteredData.forEach(item => {
-                 if(!aptMap[item.airport]) aptMap[item.airport] = { total: 0, DELAY: 0, CANCEL: 0, DIVERT: 0, RTB: 0 };
-                 aptMap[item.airport].total++;
-                 aptMap[item.airport][item.type]++;
-             });
-
-             const sortedAirports = Object.keys(aptMap).sort((a, b) => aptMap[b].total - aptMap[a].total);
-             const topAirports = sortedAirports.slice(0, 20);
-
-             const datasets = [
-                 { label: 'Delay', data: [], backgroundColor: chartColorsGlow.DELAY, borderColor: chartColors.DELAY, borderWidth: 2 },
-                 { label: 'Cancel', data: [], backgroundColor: chartColorsGlow.CANCEL, borderColor: chartColors.CANCEL, borderWidth: 2 },
-                 { label: 'Divert', data: [], backgroundColor: chartColorsGlow.DIVERT, borderColor: chartColors.DIVERT, borderWidth: 2 },
-                 { label: 'RTB', data: [], backgroundColor: chartColorsGlow.RTB, borderColor: chartColors.RTB, borderWidth: 2 }
-             ];
-
-             topAirports.forEach(apt => {
-                 datasets[0].data.push(aptMap[apt].DELAY);
-                 datasets[1].data.push(aptMap[apt].CANCEL);
-                 datasets[2].data.push(aptMap[apt].DIVERT);
-                 datasets[3].data.push(aptMap[apt].RTB);
-             });
-
-             datasets.forEach(ds => {
-                 ds.borderRadius = { topRight: 6, bottomRight: 6 };
-                 ds.borderSkipped = false;
-                 ds.barPercentage = 0.7;
-             });
-
-             if (airportChartInstance) airportChartInstance.destroy();
-
-             airportChartInstance = new Chart(ctx, {
-                 type: 'bar',
-                 plugins: [ChartDataLabels],
-                 data: { labels: topAirports, datasets: datasets },
-                 options: {
-                     responsive: true, maintainAspectRatio: false,
-                     indexAxis: 'y',
-                     scales: {
-                         x: { stacked: true, grid: gridConfig, border: {display: false}, ticks: { color: '#E2E8F0', font: {size: 11} } },
-                         y: { stacked: true, grid: { display: false }, ticks: { color: '#F1F5F9', font: {family: 'monospace', size: 11, weight: 'bold'} } }
-                     },
-                     plugins: {
-                         legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8, color: '#F1F5F9', font: {size: 12} } },
-                         datalabels: {
-                             color: '#FFFFFF',
-                             textShadowColor: 'rgba(0, 0, 0, 0.9)',
-                             textShadowBlur: 4,
-                             font: { family: "'Inter'", weight: 'bold', size: 11 },
-                             formatter: (value) => value > 0 ? value : null,
-                             anchor: 'center',
-                             align: 'center'
-                         }
-                     }
-                 }
-             });
-        }
-
-        const neonColorPalette = [
-            '#38BDF8', '#F87171', '#A78BFA', '#4ADE80', '#FBBF24', 
-            '#FB923C', '#E879F9', '#818CF8', '#2DD4BF', '#F472B6'
-        ];
-
-        function renderMultiAirportLineChart() {
-            const ctx = document.getElementById('multiAirportLineChart').getContext('2d');
-            
-            const dateSet = new Set();
-            filteredData.forEach(item => dateSet.add(item.date));
-            const sortedDates = Array.from(dateSet).sort();
-            
-            const aptCounts = {};
-            filteredData.forEach(item => {
-                aptCounts[item.airport] = (aptCounts[item.airport] || 0) + 1;
-            });
-            const topAirports = Object.keys(aptCounts).sort((a,b) => aptCounts[b] - aptCounts[a]).slice(0, 10);
-            
-            const dataMap = {};
-            topAirports.forEach(apt => {
-                dataMap[apt] = {};
-                sortedDates.forEach(d => dataMap[apt][d] = 0);
-            });
-            
-            filteredData.forEach(item => {
-                if(dataMap[item.airport]) {
-                    dataMap[item.airport][item.date]++;
-                }
-            });
-            
-            const datasets = topAirports.map((apt, index) => {
-                const color = neonColorPalette[index % neonColorPalette.length];
-                const dataArray = sortedDates.map(d => dataMap[apt][d]);
-                
-                return {
-                    label: apt,
-                    data: dataArray,
-                    borderColor: color,
-                    backgroundColor: color,
-                    fill: false,
-                    tension: 0.4,
-                    borderWidth: 3,
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
-                    pointHitRadius: 15,
-                    pointBackgroundColor: color,
-                    pointBorderColor: '#1E293B',
-                    pointBorderWidth: 2
-                };
-            });
-            
-            if (multiAirportLineChartInstance) multiAirportLineChartInstance.destroy();
-            
-            multiAirportLineChartInstance = new Chart(ctx, {
-                type: 'line',
-                plugins: [ChartDataLabels],
-                data: { labels: sortedDates, datasets: datasets },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: { 
-                            position: 'bottom',
-                            labels: { boxWidth: 10, usePointStyle: true, padding: 12, font: {size: 12}, color: '#F1F5F9' }
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                            borderColor: 'rgba(255, 255, 255, 0.1)',
-                            borderWidth: 1,
-                            titleColor: '#F8FAFC',
-                            bodyColor: '#CBD5E1',
-                            padding: 10,
-                            usePointStyle: true
-                        },
-                        datalabels: {
-                            color: (ctx) => ctx.dataset.borderColor,
-                            font: { family: "'Inter'", weight: 'bold', size: 11 },
-                            textShadowColor: 'rgba(11, 17, 33, 0.9)',
-                            textShadowBlur: 4,
-                            formatter: (value) => value > 0 ? value : null,
-                            align: 'top',
-                            anchor: 'end',
-                            offset: 4
-                        }
-                    },
-                    scales: {
-                        x: { 
-                            grid: { display: false }, 
-                            ticks: { color: '#E2E8F0', font: {size: 11}, maxRotation: 45, autoSkip: true, maxTicksLimit: 15 } 
-                        },
-                        y: { 
-                            beginAtZero: true, 
-                            grid: gridConfig, 
-                            border: {display: false}, 
-                            ticks: { color: '#E2E8F0', font: {size: 11}, stepSize: 1 } 
-                        }
-                    }
-                }
-            });
-        }
-
-        function renderAirportDonutChart() {
-            const ctx = document.getElementById('airportDonutChart').getContext('2d');
-            
-            const aptCounts = {};
-            filteredData.forEach(item => {
-                aptCounts[item.airport] = (aptCounts[item.airport] || 0) + 1;
-            });
-            
-            const sortedApts = Object.entries(aptCounts).sort((a,b) => b[1] - a[1]);
-            
-            const top5 = sortedApts.slice(0, 5);
-            const others = sortedApts.slice(5).reduce((sum, curr) => sum + curr[1], 0);
-            
-            const labels = top5.map(a => a[0]);
-            const data = top5.map(a => a[1]);
-            
-            if (others > 0) {
-                labels.push('Lainnya');
-                data.push(others);
-            }
-            
-            const bgColors = neonColorPalette.slice(0, labels.length);
-
-            if (airportDonutChartInstance) airportDonutChartInstance.destroy();
-
-            airportDonutChartInstance = new Chart(ctx, {
-                type: 'doughnut',
-                plugins: [ChartDataLabels],
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: bgColors,
-                        borderWidth: 3,
-                        borderColor: '#1E293B',
-                        hoverOffset: 8
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    layout: { padding: { top: 25, bottom: 25, left: 35, right: 35 } },
-                    plugins: {
-                        legend: { position: 'bottom', labels: { padding: 12, usePointStyle: true, boxWidth: 8, color: '#F1F5F9', font: {size: 12} } },
-                        tooltip: {
-                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                            titleColor: '#F8FAFC',
-                            bodyColor: '#CBD5E1',
-                            borderColor: 'rgba(255, 255, 255, 0.1)',
-                            borderWidth: 1,
-                            padding: 10,
-                            cornerRadius: 8,
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.label || '';
-                                    if (label) label += ': ';
-                                    if (context.parsed !== null) {
-                                        let total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                        let percentage = total > 0 ? ((context.parsed / total) * 100).toFixed(1) + '%' : '0%';
-                                        label += context.parsed.toLocaleString('id-ID') + ' (' + percentage + ')';
-                                    }
-                                    return label;
-                                }
-                            }
-                        },
-                        datalabels: {
-                            color: '#FFFFFF',
-                            anchor: 'end',
-                            align: 'end',
-                            offset: 15,
-                            backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                            borderColor: 'rgba(255, 255, 255, 0.15)',
-                            borderWidth: 1,
-                            borderRadius: 4,
-                            padding: 5,
-                            font: { family: "'Inter'", weight: 'bold', size: 12 },
-                            formatter: (value, ctx) => {
-                                let sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
-                                if (value === 0 || sum === 0) return null;
-                                let percentage = (value * 100 / sum);
-                                if (percentage < 4) return null;
-                                return value + " (" + percentage.toFixed(0) + "%)";
-                            }
-                        }
-                    },
-                    cutout: '60%'
-                }
-            });
-        }
-
-        function exportToPDF() {
-            if (filteredData.length === 0) {
-                alert("Tidak ada data untuk diekspor.");
-                return;
-            }
-            
-            const btn = document.getElementById('export-pdf-btn');
-            const originalHtml = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-rose-400"></i><span>Memproses PDF...</span>';
-            btn.disabled = true;
-
-            const element = document.getElementById('dashboard-content');
-
-            const canvasOptions = {
-                scale: 2.0,
-                useCORS: true,
-                allowTaint: true,
-                logging: false,
-                backgroundColor: "#0B1120",
-                onclone: (clonedDoc) => {
-                    const clonedElement = clonedDoc.getElementById('dashboard-content');
-                    if (!clonedElement) return;
-
-                    clonedElement.style.padding = '20px';
-                    clonedElement.style.backgroundColor = '#0B1120';
-                    clonedElement.style.color = '#F8FAFC';
+                {/* Grid 2 Columns */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     
-                    const cards = clonedDoc.querySelectorAll('.airport-card');
-                    cards.forEach(card => {
-                        card.style.backdropFilter = 'none';
-                        card.style.webkitBackdropFilter = 'none';
-                        card.style.backgroundColor = '#0F172A';
-                        card.style.boxShadow = 'none';
-                        card.style.border = '1px solid #334155';
-                        card.style.transition = 'none';
-                    });
+                    {/* 1. Bar Chart: Total Gangguan per Bandara */}
+                    <div className="bg-[#111827]/80 backdrop-blur-md rounded-2xl p-6 border border-slate-800 shadow-xl flex flex-col h-[400px]">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="p-2 bg-emerald-500/20 rounded-lg border border-emerald-500/30">
+                                <BarChart3 className="w-5 h-5 text-emerald-400" />
+                            </div>
+                            <h2 className="text-lg font-bold text-slate-100 tracking-wide">1. JUMLAH TOTAL GANGGUAN PER BANDARA</h2>
+                        </div>
+                        <div className="flex-1 w-full min-h-0">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={totalByAirport} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.5} />
+                                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} angle={-45} textAnchor="end" />
+                                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b', opacity: 0.8 }} />
+                                    <Bar dataKey="value" name="Total Data" radius={[4, 4, 0, 0]}>
+                                        {totalByAirport.map((entry, index) => (
+                                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                        <LabelList dataKey="value" position="top" fill="#e2e8f0" fontSize={12} fontWeight="bold" offset={8} />
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
 
-                    const tableContainer = clonedDoc.querySelector('.table-container');
-                    if (tableContainer) {
-                        tableContainer.style.overflow = 'visible';
-                        tableContainer.style.maxHeight = 'none';
-                    }
-                }
-            };
+                    {/* 2. Jenis Gangguan per bandara */}
+                    <div className="bg-[#111827]/80 backdrop-blur-md rounded-2xl p-6 border border-slate-800 shadow-xl flex flex-col h-[400px]">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="p-2 bg-pink-500/20 rounded-lg border border-pink-500/30">
+                                <PieChartIcon className="w-5 h-5 text-pink-400" />
+                            </div>
+                            <h2 className="text-lg font-bold text-slate-100 tracking-wide">
+                                2. JUMLAH JENIS GANGGUAN {selectedAirport !== 'All' ? <span className="text-pink-400">({selectedAirport})</span> : ''}
+                            </h2>
+                        </div>
+                        <div className="flex-1 w-full min-h-0 relative">
+                            {typesByAirport.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={typesByAirport} cx="50%" cy="50%" innerRadius={70} outerRadius={110} paddingAngle={4} dataKey="value" stroke="none"
+                                            labelLine={false} label={renderCustomizedPieLabel}
+                                        >
+                                            {typesByAirport.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={COLORS[(index + 3) % COLORS.length]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip content={<CustomTooltip />} />
+                                        <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '13px', color: '#cbd5e1' }} iconType="circle" />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-slate-500">N/A</div>
+                            )}
+                        </div>
+                    </div>
+                </div>
 
-            html2canvas(element, canvasOptions).then(renderedCanvas => {
-                const imgData = renderedCanvas.toDataURL('image/jpeg', 0.95);
-                const jsPDFClass = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : window.jsPDF;
+                {/* Bottom Row: Global Percentages */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* 6. Persentase jumlah gangguan secara keseluruhan (Bandara) */}
+                    <div className="bg-[#111827]/80 backdrop-blur-md rounded-2xl p-6 border border-slate-800 shadow-xl flex flex-col h-[450px]">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-500/30">
+                                <PieChartIcon className="w-5 h-5 text-amber-400" />
+                            </div>
+                            <h2 className="text-lg font-bold text-slate-100 tracking-wide">6. % JUMLAH GANGGUAN KESELURUHAN (BANDARA)</h2>
+                        </div>
+                        <div className="flex-1 w-full min-h-0 mt-4">
+                             <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        activeIndex={activeIndexAirports} activeShape={renderActiveShape} data={overallAirports} cx="50%" cy="50%" innerRadius={80} outerRadius={110} dataKey="value" stroke="none" paddingAngle={2} onMouseEnter={(_, index) => setActiveIndexAirports(index)}
+                                        labelLine={false} label={renderCustomizedPieLabel}
+                                    >
+                                        {overallAirports.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Pie>
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
 
-                if (jsPDFClass) {
-                    const pdf = new jsPDFClass({
-                        orientation: 'landscape',
-                        unit: 'mm',
-                        format: 'a3'
-                    });
+                    {/* 7. Persentase jenis gangguan secara keseluruhan (Nasional) */}
+                     <div className="bg-[#111827]/80 backdrop-blur-md rounded-2xl p-6 border border-slate-800 shadow-xl flex flex-col h-[450px]">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="p-2 bg-purple-500/20 rounded-lg border border-purple-500/30">
+                                <PieChartIcon className="w-5 h-5 text-purple-400" />
+                            </div>
+                            <h2 className="text-lg font-bold text-slate-100 tracking-wide">7. % JENIS GANGGUAN KESELURUHAN</h2>
+                        </div>
+                        <div className="flex-1 w-full min-h-0 mt-4">
+                             <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        activeIndex={activeIndexTypes} activeShape={renderActiveShape} data={overallTypes} cx="50%" cy="50%" innerRadius={80} outerRadius={110} dataKey="value" stroke="none" paddingAngle={2} onMouseEnter={(_, index) => setActiveIndexTypes(index)}
+                                        labelLine={false} label={renderCustomizedPieLabel}
+                                    >
+                                        {overallTypes.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[(index + 5) % COLORS.length]} />
+                                        ))}
+                                    </Pie>
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
 
-                    const imgProps = pdf.getImageProperties(imgData);
-                    const pdfWidth = pdf.internal.pageSize.getWidth();
-                    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-                    const pageHeight = pdf.internal.pageSize.getHeight();
+                {}
+                {/* 8. Tabel Interaktif Rekapitulasi */}
+                <div className="bg-[#111827]/80 backdrop-blur-md rounded-2xl p-6 border border-slate-800 shadow-xl flex flex-col mt-6">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="p-2 bg-indigo-500/20 rounded-lg border border-indigo-500/30">
+                            <FileSpreadsheet className="w-5 h-5 text-indigo-400" />
+                        </div>
+                        <h2 className="text-lg font-bold text-slate-100 tracking-wide">8. TABEL REKAPITULASI GANGGUAN HARIAN</h2>
+                    </div>
+                    
+                    <div className="w-full overflow-x-auto rounded-xl border border-slate-700 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
+                        <table className="w-full text-center border-collapse min-w-max text-sm">
+                            <thead>
+                                <tr>
+                                    <th className="sticky left-0 z-20 bg-[#1e293b] text-slate-200 font-bold p-3 border border-slate-600 w-24 shadow-[2px_0_5px_rgba(0,0,0,0.2)]">Tanggal</th>
+                                    {pivotData.airports.map(apt => (
+                                        <th key={apt} className="bg-[#1e293b] text-slate-200 font-bold p-3 border border-slate-600 w-20">{apt}</th>
+                                    ))}
+                                    <th className="bg-slate-700 text-white font-bold p-3 border border-slate-600 w-24">TOTAL</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {pivotData.rows.map((row, i) => (
+                                    <tr key={i} className="hover:bg-slate-800/80 transition-colors bg-[#0f172a]/50">
+                                        <td className={`sticky left-0 z-10 font-bold p-2 border border-slate-700 shadow-[2px_0_5px_rgba(0,0,0,0.2)] ${row.colorClass}`}>
+                                            {row.day}
+                                        </td>
+                                        {pivotData.airports.map(apt => (
+                                            <td key={apt} className="p-2 border border-slate-700 text-slate-300">
+                                                {row[apt] > 0 ? <span className="font-semibold text-slate-200">{row[apt]}</span> : <span className="text-slate-600">0</span>}
+                                            </td>
+                                        ))}
+                                        <td className="font-bold p-2 border border-slate-700 text-cyan-400 bg-slate-800/40">
+                                            {row.total}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <th className="sticky left-0 z-20 bg-slate-800 text-white font-bold p-3 border border-slate-600 shadow-[2px_0_5px_rgba(0,0,0,0.2)]">TOTAL</th>
+                                    {pivotData.airports.map(apt => (
+                                        <th key={apt} className="bg-slate-800 text-white font-bold p-3 border border-slate-600">
+                                            {pivotData.totals[apt]}
+                                        </th>
+                                    ))}
+                                    <th className="bg-cyan-900 text-cyan-100 font-black p-3 border border-cyan-800 text-base shadow-inner">
+                                        {pivotData.totals.total}
+                                    </th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
 
-                    if (pdfHeight <= pageHeight) {
-                        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-                    } else {
-                        let heightLeft = pdfHeight;
-                        let position = 0;
-
-                        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
-                        heightLeft -= pageHeight;
-
-                        while (heightLeft > 0) {
-                            position = heightLeft - pdfHeight;
-                            pdf.addPage();
-                            pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
-                            heightLeft -= pageHeight;
-                        }
-                    }
-
-                    pdf.save(`Dashboard_Irregularity_${new Date().toISOString().slice(0, 10)}.pdf`);
-                    btn.innerHTML = originalHtml;
-                    btn.disabled = false;
-                } else {
-                    const img = new Image();
-                    img.src = imgData;
-                    img.onload = () => {
-                        const opt = {
-                            margin: 0,
-                            filename: `Dashboard_Irregularity_${new Date().toISOString().slice(0,10)}.pdf`,
-                            image: { type: 'jpeg', quality: 0.95 },
-                            html2canvas: { scale: 1 },
-                            jsPDF: { unit: 'mm', format: 'a3', orientation: 'landscape' }
-                        };
-                        html2pdf().from(img).set(opt).save().then(() => {
-                            btn.innerHTML = originalHtml;
-                            btn.disabled = false;
-                        });
-                    };
-                }
-            }).catch(err => {
-                console.error("PDF Export Error:", err);
-                alert("Gagal membuat PDF: " + (err.message || "Terjadi kesalahan saat merender file."));
-                btn.innerHTML = originalHtml;
-                btn.disabled = false;
-            });
-        }
-
-        // High-resolution image downloader for PowerPoint & Presentations
-        function downloadChart(canvasId, fileName) {
-            const canvas = document.getElementById(canvasId);
-            if (!canvas) return;
-            
-            const tempCanvas = document.createElement('canvas');
-            const ctx = tempCanvas.getContext('2d');
-            
-            // Render High Resolution 3x scale
-            const scale = 3;
-            tempCanvas.width = canvas.width * scale;
-            tempCanvas.height = canvas.height * scale;
-            
-            ctx.fillStyle = '#0B1120';
-            ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-            
-            ctx.scale(scale, scale);
-            ctx.drawImage(canvas, 0, 0);
-            
-            const link = document.createElement('a');
-            link.download = `${fileName}_HighRes.png`;
-            link.href = tempCanvas.toDataURL('image/png', 1.0);
-            link.click();
-        }
-
-        function updateTable() {
-            const tbody = document.getElementById('data-table-body');
-            const countLabel = document.getElementById('table-count-label');
-            tbody.innerHTML = '';
-
-            const displayData = filteredData.slice(0, 50);
-            countLabel.innerText = `Menampilkan ${displayData.length} dari ${filteredData.length} data`;
-
-            if (displayData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-slate-500 font-mono text-xs">TIDAK ADA DATA UNTUK FILTER SEMENTARA</td></tr>';
-                return;
-            }
-
-            displayData.forEach(item => {
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-white/5 transition-colors";
-                
-                let typeColorClass = 'bg-slate-800 text-slate-300 border-slate-600';
-                let iconClass = 'fa-solid fa-circle-info';
-
-                if(item.type === 'DELAY') { typeColorClass = 'bg-amber-500/10 text-amber-400 border-amber-500/30'; iconClass = 'fa-solid fa-clock'; }
-                if(item.type === 'CANCEL') { typeColorClass = 'bg-red-500/10 text-red-400 border-red-500/30'; iconClass = 'fa-solid fa-ban'; }
-                if(item.type === 'DIVERT') { typeColorClass = 'bg-purple-500/10 text-purple-400 border-purple-500/30'; iconClass = 'fa-solid fa-route'; }
-                if(item.type === 'RTB') { typeColorClass = 'bg-sky-500/10 text-sky-400 border-sky-500/30'; iconClass = 'fa-solid fa-rotate-left'; }
-
-                tr.innerHTML = `
-                    <td class="px-5 py-3 whitespace-nowrap font-mono text-slate-400">${item.date}</td>
-                    <td class="px-5 py-3 whitespace-nowrap font-bold text-slate-200">${item.airport}</td>
-                    <td class="px-5 py-3 whitespace-nowrap font-mono text-blue-300">${item.flightNo}</td>
-                    <td class="px-5 py-3 whitespace-nowrap">
-                        <span class="px-2.5 py-1 inline-flex items-center gap-1.5 text-[10px] font-bold rounded border ${typeColorClass} tracking-wider">
-                            <i class="${iconClass}"></i> ${item.type}
-                        </span>
-                    </td>
-                    <td class="px-5 py-3 text-slate-300 truncate max-w-xs font-sans text-xs" title="${item.remark}">${item.remark}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        function renderPivotTable() {
-            const tbody = document.getElementById('pivot-table-body');
-            tbody.innerHTML = '';
-
-            if (filteredData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-slate-500 font-mono text-xs">TIDAK ADA DATA</td></tr>';
-                return;
-            }
-
-            const aptMap = {};
-            filteredData.forEach(item => {
-                if(!aptMap[item.airport]) aptMap[item.airport] = { DELAY: 0, CANCEL: 0, DIVERT: 0, RTB: 0, TOTAL: 0 };
-                aptMap[item.airport][item.type]++;
-                aptMap[item.airport].TOTAL++;
-            });
-
-            const sortedAirports = Object.keys(aptMap).sort((a, b) => aptMap[b].TOTAL - aptMap[a].TOTAL);
-
-            sortedAirports.forEach(apt => {
-                const data = aptMap[apt];
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-800/40 transition-colors";
-                
-                const createClickableCell = (count, type, colorClass) => {
-                    if (count === 0) return `<td class="px-5 py-3 text-center text-slate-600 font-mono">-</td>`;
-                    const borderColor = colorClass.replace('text-', 'border-').replace('400', '500/50');
-                    const hoverBg = colorClass.replace('text-', 'bg-').replace('400', '500/10');
-                    return `
-                        <td class="px-5 py-3 text-center">
-                            <button onclick="openDetailModal('${apt}', '${type}')" class="px-3 py-1 rounded-md bg-slate-800/50 hover:${hoverBg} border border-slate-700/50 hover:${borderColor} transition-all font-mono font-bold ${colorClass} hover:shadow-[0_0_12px_currentColor]">
-                                ${count}
-                            </button>
-                        </td>
-                    `;
-                };
-
-                tr.innerHTML = `
-                    <td class="px-5 py-3 whitespace-nowrap font-bold text-slate-200 border-r border-slate-700/50">${apt}</td>
-                    ${createClickableCell(data.DELAY, 'DELAY', 'text-amber-400')}
-                    ${createClickableCell(data.CANCEL, 'CANCEL', 'text-red-400')}
-                    ${createClickableCell(data.DIVERT, 'DIVERT', 'text-purple-400')}
-                    ${createClickableCell(data.RTB, 'RTB', 'text-sky-400')}
-                    <td class="px-5 py-3 text-center border-l border-slate-700/50">
-                        <button onclick="openDetailModal('${apt}', 'ALL')" class="px-3 py-1.5 rounded-md bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/40 transition-all font-mono font-black text-white hover:shadow-[0_0_15px_rgba(59,130,246,0.5)]">
-                            ${data.TOTAL}
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        function openDetailModal(airport, type) {
-            const modal = document.getElementById('detail-modal');
-            const modalBox = document.getElementById('modal-content-box');
-            const tbody = document.getElementById('modal-table-body');
-            const title = document.getElementById('modal-title');
-            const subtitle = document.getElementById('modal-subtitle');
-            
-            const detailData = filteredData.filter(item => {
-                const matchApt = item.airport === airport;
-                const matchType = type === 'ALL' ? true : item.type === type;
-                return matchApt && matchType;
-            });
-
-            title.innerText = `Rincian Temuan - ${airport}`;
-            subtitle.innerText = `Kategori: ${type === 'ALL' ? 'Semua Jenis' : type} | Total: ${detailData.length} Data Berdasarkan Filter Saat Ini`;
-
-            tbody.innerHTML = '';
-            detailData.forEach(item => {
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-white/5 transition-colors";
-                
-                let typeColorClass = 'bg-slate-800 text-slate-300 border-slate-600';
-                let iconClass = 'fa-solid fa-circle-info';
-
-                if(item.type === 'DELAY') { typeColorClass = 'bg-amber-500/10 text-amber-400 border-amber-500/30'; iconClass = 'fa-solid fa-clock'; }
-                if(item.type === 'CANCEL') { typeColorClass = 'bg-red-500/10 text-red-400 border-red-500/30'; iconClass = 'fa-solid fa-ban'; }
-                if(item.type === 'DIVERT') { typeColorClass = 'bg-purple-500/10 text-purple-400 border-purple-500/30'; iconClass = 'fa-solid fa-route'; }
-                if(item.type === 'RTB') { typeColorClass = 'bg-sky-500/10 text-sky-400 border-sky-500/30'; iconClass = 'fa-solid fa-rotate-left'; }
-
-                tr.innerHTML = `
-                    <td class="px-5 py-3 whitespace-nowrap font-mono text-slate-400">${item.date}</td>
-                    <td class="px-5 py-3 whitespace-nowrap font-bold text-slate-200">${item.airport}</td>
-                    <td class="px-5 py-3 whitespace-nowrap font-mono text-blue-300">${item.flightNo}</td>
-                    <td class="px-5 py-3 whitespace-nowrap">
-                        <span class="px-2 py-1 inline-flex items-center gap-1.5 text-[10px] font-bold rounded border ${typeColorClass} tracking-wider">
-                            <i class="${iconClass}"></i> ${item.type}
-                        </span>
-                    </td>
-                    <td class="px-5 py-3 text-slate-300 text-xs">${item.remark}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-
-            modal.classList.remove('hidden');
-            setTimeout(() => {
-                modalBox.classList.remove('scale-95');
-                modalBox.classList.add('scale-100');
-            }, 10);
-        }
-
-        function closeModal() {
-            const modal = document.getElementById('detail-modal');
-            const modalBox = document.getElementById('modal-content-box');
-            
-            modalBox.classList.remove('scale-100');
-            modalBox.classList.add('scale-95');
-            
-            setTimeout(() => {
-                modal.classList.add('hidden');
-            }, 200);
-        }
-
-        function exportToImage() {
-            if (filteredData.length === 0) {
-                alert("Tidak ada data untuk diekspor.");
-                return;
-            }
-            
-            const btn = document.getElementById('export-img-btn');
-            const originalHtml = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-purple-400"></i><span>Mengekspor...</span>';
-            btn.disabled = true;
-
-            const element = document.getElementById('dashboard-content');
-            
-            html2canvas(element, {
-                scale: 2.5,
-                useCORS: true,
-                backgroundColor: "#0B1120",
-                onclone: (clonedDoc) => {
-                    const clonedElement = clonedDoc.getElementById('dashboard-content');
-                    clonedElement.style.padding = '20px';
-                }
-            }).then(canvas => {
-                const link = document.createElement('a');
-                link.download = `Dashboard_Snapshot_${new Date().toISOString().slice(0, 10)}.png`;
-                link.href = canvas.toDataURL('image/png', 1.0);
-                link.click();
-                
-                btn.innerHTML = originalHtml;
-                btn.disabled = false;
-            }).catch(err => {
-                console.error("Export Image Error:", err);
-                alert("Gagal mengunduh gambar dashboard.");
-                btn.innerHTML = originalHtml;
-                btn.disabled = false;
-            });
-        }
-    </script>
-</body>
-</html>
+            </div>
+        )}
+      </div>
+    </div>
+  );
+}
