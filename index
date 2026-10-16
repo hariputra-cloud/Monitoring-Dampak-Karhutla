@@ -27,21 +27,16 @@
     }
   </script>
   
-  <!-- Font Awesome Icons & Inter Font -->
+  <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
-  <!-- SheetJS (xlsx) CDN -->
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Chart.js DataLabels Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+  <!-- SheetJS (xlsx) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
-  <!-- React, ReactDOM, & Babel (Untuk eksekusi JSX di browser) -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- Recharts & Prop-Types CDN -->
-  <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
-  <script src="https://unpkg.com/recharts@2.10.3/umd/Recharts.js"></script>
+  <!-- Inter Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
     body { font-family: 'Inter', sans-serif; }
@@ -54,231 +49,49 @@
       backdrop-filter: blur(12px);
       border: 1px solid rgba(255, 255, 255, 0.08);
     }
+    .scrollbar-thin::-webkit-scrollbar { height: 8px; }
+
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.9) sepia(1) saturate(5) hue-rotate(185deg);
+      cursor: pointer;
+      opacity: 0.9;
+    }
+    input[type="date"]::-webkit-calendar-picker-indicator:hover {
+      opacity: 1;
+    }
   </style>
 </head>
 
-<body class="h-full bg-slate-900 text-slate-100 antialiased">
-  <!-- Container Utama React -->
-  <div id="root"></div>
-
-  <!-- Skrip Aplikasi React (Babel) -->
-  <script type="text/babel">
-    const { useState, useEffect, useMemo, useRef } = React;
-    const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } = window.Recharts || {};
-
-    const COLORS = ['#3b82f6', '#fbbf24', '#ef4444', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4'];
-
-    function App() {
-      const [data, setData] = useState([]);
-      const [loading, setLoading] = useState(false);
-      const [selectedAirport, setSelectedAirport] = useState('All');
-      const [selectedCategory, setSelectedCategory] = useState('All');
-      const [searchTerm, setSearchTerm] = useState('');
-
-      // Generate Data Awal (Mock Data)
-      useEffect(() => {
-        const mockAirports = ['PNK (Supadio)', 'PKY (Tjilik Riwut)', 'DJB (Sultan Thaha)', 'BPN (SAMS Sepinggan)', 'DJJ (Sentani)'];
-        const mockCategories = ['Kabut Asap / Weather', 'Cuaca Buruk / Wind', 'Gangguan Teknis Runway', 'Keterlambatan Operational'];
+<body class="h-full flex flex-col antialiased selection:bg-blue-500 selection:text-white bg-slate-900">
+  <div id="app" class="min-h-screen flex flex-col">
+    
+    <!-- Top Navigation / Header -->
+    <header class="sticky top-0 z-40 glass-card border-b border-slate-800 bg-slate-900/90 backdrop-blur-md">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         
-        const generated = Array.from({ length: 35 }, (_, i) => ({
-          id: i + 1,
-          tanggal: `2026-10-${String((i % 15) + 1).padStart(2, '0')}`,
-          bandara: mockAirports[i % mockAirports.length],
-          jenis: mockCategories[i % mockCategories.length],
-          penerbangan: `GA-${100 + i}`,
-          keterangan: `Laporan insiden penerbangan ke-${i + 1}`
-        }));
-
-        setData(generated);
-      }, []);
-
-      // Handlers
-      const handleFileUpload = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        setLoading(true);
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          try {
-            const dataBuffer = new Uint8Array(evt.target.result);
-            const workbook = XLSX.read(dataBuffer, { type: 'array' });
-            const sheetName = workbook.SheetNames[0];
-            const rawJson = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-
-            const parsed = rawJson.map((row, idx) => ({
-              id: idx + 1,
-              tanggal: row.Tanggal || row.tanggal || '2026-10-01',
-              bandara: row.Bandara || row.bandara || 'LOKASI',
-              jenis: row.Jenis || row.jenis || 'Lain-lain',
-              penerbangan: row.Penerbangan || row.penerbangan || '-',
-              keterangan: row.Keterangan || row.keterangan || '-'
-            }));
-
-            setData(parsed);
-            setLoading(false);
-          } catch (err) {
-            alert('Gagal memproses file Excel!');
-            setLoading(false);
-          }
-        };
-        reader.readAsArrayBuffer(file);
-      };
-
-      // Filter Data
-      const filteredData = useMemo(() => {
-        return data.filter(item => {
-          const matchAirport = selectedAirport === 'All' || item.bandara === selectedAirport;
-          const matchCategory = selectedCategory === 'All' || item.jenis === selectedCategory;
-          const matchSearch = item.bandara.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              item.jenis.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              item.penerbangan.toLowerCase().includes(searchTerm.toLowerCase());
-          return matchAirport && matchCategory && matchSearch;
-        });
-      }, [data, selectedAirport, selectedCategory, searchTerm]);
-
-      // Chart Data aggregations
-      const categoryChartData = useMemo(() => {
-        const counts = {};
-        filteredData.forEach(d => { counts[d.jenis] = (counts[d.jenis] || 0) + 1; });
-        return Object.keys(counts).map(key => ({ name: key, value: counts[key] }));
-      }, [filteredData]);
-
-      return (
-        <div class="min-h-screen flex flex-col">
-          {/* Header */}
-          <header class="sticky top-0 z-40 glass-card border-b border-slate-800 bg-slate-900/90 backdrop-blur-md">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-              <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/30">
-                  <i class="fa-solid fa-plane-arrival text-white text-lg"></i>
-                </div>
-                <div>
-                  <h1 class="text-lg font-bold text-white tracking-wide leading-tight">MONITORING GANGGUAN BANDARA</h1>
-                  <p class="text-xs text-slate-400">Sistem Tracking & Analisis Irregularitas Penerbangan</p>
-                </div>
-              </div>
-
-              <div class="flex items-center space-x-3">
-                <label class="cursor-pointer inline-flex items-center space-x-2 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs sm:text-sm transition-all shadow-lg shadow-emerald-900/30">
-                  <i class="fa-solid fa-file-excel"></i>
-                  <span>Upload Excel</span>
-                  <input type="file" accept=".xlsx, .xls, .csv" class="hidden" onChange={handleFileUpload} />
-                </label>
-              </div>
-            </div>
-          </header>
-
-          <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-            {/* KPI Cards */}
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div class="glass-card rounded-2xl p-4 border border-slate-800">
-                <div class="text-xs font-semibold text-slate-400 uppercase">Total Gangguan</div>
-                <div class="text-3xl font-extrabold text-white mt-1">{filteredData.length}</div>
-              </div>
-              <div class="glass-card rounded-2xl p-4 border border-slate-800">
-                <div class="text-xs font-semibold text-slate-400 uppercase">Bandara Terdampak</div>
-                <div class="text-3xl font-extrabold text-amber-400 mt-1">
-                  {new Set(filteredData.map(d => d.bandara)).size}
-                </div>
-              </div>
-              <div class="glass-card rounded-2xl p-4 border border-slate-800">
-                <div class="text-xs font-semibold text-slate-400 uppercase">Kategori Gangguan</div>
-                <div class="text-3xl font-extrabold text-red-400 mt-1">
-                  {new Set(filteredData.map(d => d.jenis)).size}
-                </div>
-              </div>
-              <div class="glass-card rounded-2xl p-4 border border-slate-800">
-                <div class="text-xs font-semibold text-slate-400 uppercase">Status Upload</div>
-                <div class="text-3xl font-extrabold text-emerald-400 mt-1">{loading ? 'Memuat...' : 'Aktif'}</div>
-              </div>
-            </div>
-
-            {/* Filter Controls */}
-            <div class="glass-card rounded-2xl p-5 space-y-4">
-              <h3 class="text-sm font-bold text-white tracking-wide uppercase">Filter & Pencarian</h3>
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label class="block text-xs font-semibold text-slate-400 mb-1">Bandar Udara</label>
-                  <select 
-                    value={selectedAirport} 
-                    onChange={(e) => setSelectedAirport(e.target.value)}
-                    class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-xl p-2.5 outline-none focus:border-blue-500"
-                  >
-                    <option value="All">Semua Bandar Udara</option>
-                    {[...new Set(data.map(d => d.bandara))].map(a => <option key={a} value={a}>{a}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-xs font-semibold text-slate-400 mb-1">Jenis Gangguan</label>
-                  <select 
-                    value={selectedCategory} 
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                    class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-xl p-2.5 outline-none focus:border-blue-500"
-                  >
-                    <option value="All">Semua Jenis Gangguan</option>
-                    {[...new Set(data.map(d => d.jenis))].map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-xs font-semibold text-slate-400 mb-1">Cari Keywords</label>
-                  <input 
-                    type="text" 
-                    placeholder="Cari flight, bandara..." 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-xl p-2.5 outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Data Table */}
-            <div class="glass-card rounded-2xl p-5 space-y-4">
-              <h3 class="text-sm font-bold text-white tracking-wide uppercase">Log Data Detail Gangguan</h3>
-              <div class="overflow-x-auto rounded-xl border border-slate-800">
-                <table class="w-full text-xs text-left">
-                  <thead class="bg-slate-800 text-slate-300 uppercase font-semibold border-b border-slate-700">
-                    <tr>
-                      <th class="px-4 py-3">Tanggal</th>
-                      <th class="px-4 py-3">Bandar Udara</th>
-                      <th class="px-4 py-3">Jenis Gangguan</th>
-                      <th class="px-4 py-3">Penerbangan</th>
-                      <th class="px-4 py-3">Keterangan</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-slate-800">
-                    {filteredData.length > 0 ? (
-                      filteredData.map(row => (
-                        <tr key={row.id} class="hover:bg-slate-800/50 transition-colors">
-                          <td class="px-4 py-3 font-medium text-blue-400">{row.tanggal}</td>
-                          <td class="px-4 py-3 text-white">{row.bandara}</td>
-                          <td class="px-4 py-3">
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                              {row.jenis}
-                            </span>
-                          </td>
-                          <td class="px-4 py-3 text-slate-300">{row.penerbangan}</td>
-                          <td class="px-4 py-3 text-slate-400">{row.keterangan}</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="5" class="px-4 py-8 text-center text-slate-500">Tidak ada data ditemukan</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </main>
+        <!-- Logo & Title -->
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/30">
+            <i class="fa-solid fa-plane-arrival text-white text-lg"></i>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold text-white tracking-wide leading-tight">MONITORING GANGGUAN BANDARA</h1>
+            <p class="text-xs text-slate-400">Sistem Tracking & Analisis Irregularitas Penerbangan</p>
+          </div>
         </div>
-      );
-    }
 
-    // Render ke HTML DOM
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-  </script>
-</body>
-</html>
+        <!-- Action Buttons -->
+        <div class="flex items-center space-x-3">
+          <label for="excel-upload" class="cursor-pointer inline-flex items-center space-x-2 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs sm:text-sm transition-all duration-200 shadow-lg shadow-emerald-900/30 active:scale-95">
+            <i class="fa-solid fa-file-excel"></i>
+            <span class="hidden sm:inline">Upload Excel/CSV</span>
+            <span class="sm:hidden">Upload</span>
+            <input type="file" id="excel-upload" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileUpload(event)" />
+          </label>
+
+          <button onclick="exportToCSV()" class="inline-flex items-center space-x-2 px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs sm:text-sm border border-slate-700 transition-all duration-200 active:scale-95">
+            <i class="fa-solid fa-download text-blue-400"></i>
+            <span class="hidden sm:inline">Ekspor Data</span>
+          </button>
+
+          <button onclick="resetFilters()" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-red-900/50
