@@ -27,16 +27,21 @@
     }
   </script>
   
-  <!-- Font Awesome Icons -->
+  <!-- Font Awesome Icons & Inter Font -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Chart.js DataLabels Plugin -->
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
-  <!-- SheetJS (xlsx) -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <!-- Inter Font -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- SheetJS (xlsx) CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- React, ReactDOM, & Babel (Untuk eksekusi JSX di browser) -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Recharts & Prop-Types CDN -->
+  <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+  <script src="https://unpkg.com/recharts@2.10.3/umd/Recharts.js"></script>
 
   <style>
     body { font-family: 'Inter', sans-serif; }
@@ -49,1432 +54,231 @@
       backdrop-filter: blur(12px);
       border: 1px solid rgba(255, 255, 255, 0.08);
     }
-    .scrollbar-thin::-webkit-scrollbar { height: 8px; }
   </style>
 </head>
 
-<body class="h-full flex flex-col antialiased selection:bg-blue-500 selection:text-white bg-slate-900">
-  <div id="app" class="min-h-screen flex flex-col">
-    
-    <!-- Top Navigation / Header -->
-    <header class="sticky top-0 z-40 glass-card border-b border-slate-800 bg-slate-900/90 backdrop-blur-md">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+<body class="h-full bg-slate-900 text-slate-100 antialiased">
+  <!-- Container Utama React -->
+  <div id="root"></div>
+
+  <!-- Skrip Aplikasi React (Babel) -->
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef } = React;
+    const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } = window.Recharts || {};
+
+    const COLORS = ['#3b82f6', '#fbbf24', '#ef4444', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4'];
+
+    function App() {
+      const [data, setData] = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [selectedAirport, setSelectedAirport] = useState('All');
+      const [selectedCategory, setSelectedCategory] = useState('All');
+      const [searchTerm, setSearchTerm] = useState('');
+
+      // Generate Data Awal (Mock Data)
+      useEffect(() => {
+        const mockAirports = ['PNK (Supadio)', 'PKY (Tjilik Riwut)', 'DJB (Sultan Thaha)', 'BPN (SAMS Sepinggan)', 'DJJ (Sentani)'];
+        const mockCategories = ['Kabut Asap / Weather', 'Cuaca Buruk / Wind', 'Gangguan Teknis Runway', 'Keterlambatan Operational'];
         
-        <!-- Logo & Title -->
-        <div class="flex items-center space-x-3">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/30">
-            <i class="fa-solid fa-plane-arrival text-white text-lg"></i>
-          </div>
-          <div>
-            <h1 class="text-lg font-bold text-white tracking-wide leading-tight">MONITORING GANGGUAN BANDARA</h1>
-            <p class="text-xs text-slate-400">Sistem Tracking & Analisis Irregularitas Penerbangan</p>
-          </div>
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="flex items-center space-x-3">
-          <!-- Excel Upload Button -->
-          <label for="excel-upload" class="cursor-pointer inline-flex items-center space-x-2 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs sm:text-sm transition-all duration-200 shadow-lg shadow-emerald-900/30 active:scale-95">
-            <i class="fa-solid fa-file-excel"></i>
-            <span class="hidden sm:inline">Upload Excel/CSV</span>
-            <span class="sm:hidden">Upload</span>
-            <input type="file" id="excel-upload" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileUpload(event)" />
-          </label>
-
-          <!-- Export Filtered Data -->
-          <button onclick="exportToCSV()" class="inline-flex items-center space-x-2 px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs sm:text-sm border border-slate-700 transition-all duration-200 active:scale-95">
-            <i class="fa-solid fa-download text-blue-400"></i>
-            <span class="hidden sm:inline">Ekspor Data</span>
-          </button>
-
-          <!-- Reset Filter -->
-          <button onclick="resetFilters()" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-red-900/50 hover:text-red-300 text-slate-400 border border-slate-700 transition-all duration-200" title="Reset Semua Filter">
-            <i class="fa-solid fa-rotate-right"></i>
-          </button>
-        </div>
-      </div>
-    </header>
-
-    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        <!-- KPI 1: Total Gangguan -->
-        <div class="glass-card rounded-2xl p-4 relative overflow-hidden group hover:border-blue-500/50 transition-all">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Gangguan</span>
-            <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
-              <i class="fa-solid fa-triangle-exclamation"></i>
-            </div>
-          </div>
-          <div class="mt-2 flex items-baseline justify-between">
-            <span id="kpi-total-gangguan" class="text-3xl font-extrabold text-white">0</span>
-            <span class="text-xs text-blue-400 font-medium bg-blue-500/10 px-2 py-0.5 rounded-full" id="kpi-periode-label">100% Data</span>
-          </div>
-          <p class="text-xs text-slate-400 mt-1" id="kpi-sub-total">Total insiden terdeteksi</p>
-          <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
-        </div>
-
-        <!-- KPI 2: Bandara Terdampak -->
-        <div class="glass-card rounded-2xl p-4 relative overflow-hidden group hover:border-amber-500/50 transition-all">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Bandara Terdampak</span>
-            <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
-              <i class="fa-solid fa-tower-observation"></i>
-            </div>
-          </div>
-          <div class="mt-2 flex items-baseline justify-between">
-            <span id="kpi-total-bandara" class="text-3xl font-extrabold text-white">0</span>
-            <span id="kpi-top-bandara-pct" class="text-xs text-amber-400 font-medium bg-amber-500/10 px-2 py-0.5 rounded-full">-</span>
-          </div>
-          <p class="text-xs text-slate-400 mt-1 truncate" id="kpi-top-bandara-desc">Bandara terbanyak: -</p>
-          <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
-        </div>
-
-        <!-- KPI 3: Jenis Gangguan Terbanyak -->
-        <div class="glass-card rounded-2xl p-4 relative overflow-hidden group hover:border-red-500/50 transition-all">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Jenis Terbanyak</span>
-            <div class="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center">
-              <i class="fa-solid fa-bolt"></i>
-            </div>
-          </div>
-          <div class="mt-2 flex items-baseline justify-between">
-            <span id="kpi-top-kategori-count" class="text-3xl font-extrabold text-white">0</span>
-            <span id="kpi-top-kategori-pct" class="text-xs text-red-400 font-medium bg-red-500/10 px-2 py-0.5 rounded-full">-</span>
-          </div>
-          <p class="text-xs text-slate-400 mt-1 truncate" id="kpi-top-kategori-desc">Kategori: -</p>
-          <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-rose-500"></div>
-        </div>
-
-        <!-- KPI 4: Rata-Rata Gangguan Harian -->
-        <div class="glass-card rounded-2xl p-4 relative overflow-hidden group hover:border-emerald-500/50 transition-all">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Rata-Rata Harian</span>
-            <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
-              <i class="fa-solid fa-chart-line"></i>
-            </div>
-          </div>
-          <div class="mt-2 flex items-baseline justify-between">
-            <span id="kpi-avg-daily" class="text-3xl font-extrabold text-white">0.0</span>
-            <span class="text-xs text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-full">Kejadian/Hari</span>
-          </div>
-          <p class="text-xs text-slate-400 mt-1" id="kpi-range-info">Rentang Waktu: -</p>
-          <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
-        </div>
-
-      </div>
-
-      <!-- TREND GANGGUAN HARIAN & BULANAN CHART SECTION -->
-      <div class="glass-card rounded-2xl p-5 space-y-4">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div class="flex items-center space-x-3">
-            <div class="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center">
-              <i class="fa-solid fa-chart-line text-base"></i>
-            </div>
-            <div>
-              <h3 class="text-base font-bold text-white tracking-wide uppercase">TREND GANGGUAN HARIAN & BULANAN</h3>
-              <p class="text-xs text-slate-400">Grafik pergerakan dan eskalasi frekuensi gangguan berdasarkan waktu</p>
-            </div>
-          </div>
-
-          <!-- Mode Switcher: Harian / Bulanan -->
-          <div class="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800 self-start sm:self-auto">
-            <button id="btn-trend-daily" onclick="setTrendMode('daily')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-blue-600 text-white shadow-md shadow-blue-500/30">
-              Harian
-            </button>
-            <button id="btn-trend-monthly" onclick="setTrendMode('monthly')" class="px-4 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-all">
-              Bulanan
-            </button>
-          </div>
-        </div>
-
-        <div class="relative w-full h-[320px] pt-2">
-          <canvas id="chart-trend-line"></canvas>
-        </div>
-      </div>
-
-      <!-- FILTER CONTROLS & CATEGORY CHIPS -->
-      <div class="glass-card rounded-2xl p-5 space-y-4">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-3">
-          <div>
-            <h3 class="text-base font-bold text-white tracking-wide uppercase">FILTER & PENCARIAN DATA</h3>
-            <p class="text-xs text-slate-400">Saring data berdasarkan bandara, jenis gangguan, rentang tanggal, atau kata kunci</p>
-          </div>
-          <div id="active-filter-badge" class="px-2.5 py-1 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs font-medium">
-            Semua Data
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <!-- Filter Bandara -->
-          <div>
-            <label class="block text-xs font-semibold text-slate-400 mb-1.5">Bandar Udara</label>
-            <select id="filter-airport" onchange="applyFilters()" class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-xl p-2.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
-              <option value="ALL">Semua Bandar Udara</option>
-            </select>
-          </div>
-
-          <!-- Filter Jenis Gangguan -->
-          <div>
-            <label class="block text-xs font-semibold text-slate-400 mb-1.5">Jenis Gangguan</label>
-            <select id="filter-category" onchange="applyFilters()" class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-xl p-2.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
-              <option value="ALL">Semua Jenis Gangguan</option>
-            </select>
-          </div>
-
-          <!-- Filter Date Start -->
-          <div>
-            <label class="block text-xs font-semibold text-slate-400 mb-1.5">Tanggal Mulai</label>
-            <input type="date" id="filter-start-date" onchange="applyFilters()" class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-xl p-2.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" />
-          </div>
-
-          <!-- Filter Date End -->
-          <div>
-            <label class="block text-xs font-semibold text-slate-400 mb-1.5">Tanggal Akhir</label>
-            <input type="date" id="filter-end-date" onchange="applyFilters()" class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-xl p-2.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" />
-          </div>
-        </div>
-
-        <!-- Category Quick Chips -->
-        <div class="pt-2">
-          <span class="text-xs font-semibold text-slate-400 block mb-2">Kategori Cepat:</span>
-          <div id="category-chips-container" class="flex flex-wrap gap-2"></div>
-        </div>
-      </div>
-
-      <!-- INFOGRAPHICS & CATEGORY BREAKDOWN -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Chart Doughnut Kategori -->
-        <div class="glass-card rounded-2xl p-5 flex flex-col justify-between space-y-4">
-          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-            <h3 class="text-sm font-bold text-white tracking-wide uppercase">PROPORSIONAL KATEGORI GANGGUAN</h3>
-            <i class="fa-solid fa-chart-pie text-slate-400"></i>
-          </div>
-          <div class="relative w-full h-[260px] flex items-center justify-center">
-            <canvas id="chart-category-totals"></canvas>
-          </div>
-        </div>
-
-        <!-- Breakdown Top Bandara per Kategori -->
-        <div class="lg:col-span-2 glass-card rounded-2xl p-5 space-y-4">
-          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div>
-              <h3 class="text-sm font-bold text-white tracking-wide uppercase">ANALISIS BANDARA TERDAMPAK PER KATEGORI</h3>
-              <p class="text-xs text-slate-400">Distribusi insiden bandara teratas untuk tiap jenis gangguan</p>
-            </div>
-            <i class="fa-solid fa-layer-group text-slate-400"></i>
-          </div>
-          <div id="category-top-airports-cards" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-1"></div>
-        </div>
-      </div>
-
-      <!-- REKAPITULASI HARIAN PER BANDARA TABLE -->
-      <div class="glass-card rounded-2xl p-5 space-y-4">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
-          <div>
-            <h3 class="text-base font-bold text-white tracking-wide uppercase">MATRIKS REKAPITULASI HARIAN PER BANDARA</h3>
-            <p class="text-xs text-slate-400">Ringkasan matriks frekuensi insiden per bandara dan per tanggal</p>
-          </div>
-          <button onclick="exportRecapToExcel()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition-all flex items-center space-x-2 self-start sm:self-auto">
-            <i class="fa-solid fa-file-excel text-emerald-400"></i>
-            <span>Unduh Rekapitulasi Excel</span>
-          </button>
-        </div>
-
-        <div id="recap-month-legend" class="flex flex-wrap items-center gap-2 text-xs"></div>
-
-        <div class="overflow-x-auto rounded-xl border border-slate-800 scrollbar-thin">
-          <table class="w-full text-xs text-left">
-            <thead id="recap-table-head" class="bg-slate-800 text-slate-300 uppercase font-semibold"></thead>
-            <tbody id="recap-table-body" class="divide-y divide-slate-800/60"></tbody>
-            <tfoot id="recap-table-foot" class="bg-slate-900 border-t-2 border-slate-700"></tfoot>
-          </table>
-        </div>
-      </div>
-
-      <!-- DATA LOG TABLE SECTION -->
-      <div class="glass-card rounded-2xl p-5 space-y-4">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
-          <div>
-            <h3 class="text-base font-bold text-white tracking-wide uppercase">LOG DATA DETAIL GANGGUAN</h3>
-            <p class="text-xs text-slate-400">Daftar lengkap rekaman insiden dan gangguan penerbangan</p>
-          </div>
-
-          <!-- Search Input -->
-          <div class="relative w-full sm:w-64">
-            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-            <input type="text" id="table-search" oninput="applyFilters()" placeholder="Cari bandara, jenis, flight..." class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-xl pl-8 pr-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" />
-          </div>
-        </div>
-
-        <!-- Table Container -->
-        <div class="overflow-x-auto rounded-xl border border-slate-800">
-          <table class="w-full text-xs text-left">
-            <thead class="bg-slate-800 text-slate-300 uppercase font-semibold border-b border-slate-700">
-              <tr>
-                <th onclick="sortTable('tanggal')" class="px-4 py-3 cursor-pointer hover:text-white transition-colors">
-                  Tanggal <i class="fa-solid fa-sort ml-1 opacity-50"></i>
-                </th>
-                <th onclick="sortTable('bandara')" class="px-4 py-3 cursor-pointer hover:text-white transition-colors">
-                  Bandar Udara <i class="fa-solid fa-sort ml-1 opacity-50"></i>
-                </th>
-                <th onclick="sortTable('jenis')" class="px-4 py-3 cursor-pointer hover:text-white transition-colors">
-                  Jenis Gangguan <i class="fa-solid fa-sort ml-1 opacity-50"></i>
-                </th>
-                <th onclick="sortTable('penerbangan')" class="px-4 py-3 cursor-pointer hover:text-white transition-colors">
-                  Penerbangan <i class="fa-solid fa-sort ml-1 opacity-50"></i>
-                </th>
-                <th class="px-4 py-3">Keterangan / Dampak</th>
-              </tr>
-            </thead>
-            <tbody id="table-body" class="divide-y divide-slate-800"></tbody>
-          </table>
-        </div>
-
-        <!-- Table Footer / Pagination -->
-        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400 pt-2">
-          <div class="flex items-center space-x-2">
-            <span>Tampilkan</span>
-            <select id="table-page-size" onchange="changePageSize()" class="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-2 py-1 outline-none">
-              <option value="10">10</option>
-              <option value="25" selected>25</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
-            <span id="table-info">Menampilkan 0 data</span>
-          </div>
-
-          <div id="table-pagination" class="flex items-center space-x-1"></div>
-        </div>
-      </div>
-
-    </main>
-
-    <!-- Toast Notifications Container -->
-    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
-
-  </div>
-
-  <script>
-    // Register Chart.js DataLabels plugin
-    if (window.ChartDataLabels) {
-      Chart.register(ChartDataLabels);
-    }
-
-    // Dynamic Color Palette
-    const colorPalette = [
-      '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-      '#ec4899', '#06b6d4', '#84cc16', '#6366f1', '#14b8a6',
-      '#f97316', '#a855f7', '#0284c7', '#15803d', '#b45309'
-    ];
-
-    // Rich Month-Specific Color Themes for Table Row Highlighting
-    const monthColorMap = {
-      0: { name: 'Januari', rowBg: 'bg-sky-950/70 hover:bg-sky-900/80', dateBg: 'bg-sky-900/90 text-sky-200 border-sky-600/60', text: 'text-sky-300', badge: 'bg-sky-500/20 text-sky-300 border-sky-500/40' },
-      1: { name: 'Februari', rowBg: 'bg-pink-950/70 hover:bg-pink-900/80', dateBg: 'bg-pink-900/90 text-pink-200 border-pink-600/60', text: 'text-pink-300', badge: 'bg-pink-500/20 text-pink-300 border-pink-500/40' },
-      2: { name: 'Maret', rowBg: 'bg-emerald-950/70 hover:bg-emerald-900/80', dateBg: 'bg-emerald-900/90 text-emerald-200 border-emerald-600/60', text: 'text-emerald-300', badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
-      3: { name: 'April', rowBg: 'bg-teal-950/70 hover:bg-teal-900/80', dateBg: 'bg-teal-900/90 text-teal-200 border-teal-600/60', text: 'text-teal-300', badge: 'bg-teal-500/20 text-teal-300 border-teal-500/40' },
-      4: { name: 'Mei', rowBg: 'bg-lime-950/70 hover:bg-lime-900/80', dateBg: 'bg-lime-900/90 text-lime-200 border-lime-600/60', text: 'text-lime-300', badge: 'bg-lime-500/20 text-lime-300 border-lime-500/40' },
-      5: { name: 'Juni', rowBg: 'bg-amber-950/70 hover:bg-amber-900/80', dateBg: 'bg-amber-900/90 text-amber-200 border-amber-600/60', text: 'text-amber-300', badge: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
-      6: { name: 'Juli', rowBg: 'bg-cyan-950/70 hover:bg-cyan-900/80', dateBg: 'bg-cyan-900/90 text-cyan-200 border-cyan-600/60', text: 'text-cyan-300', badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' },
-      7: { name: 'Agustus', rowBg: 'bg-rose-950/70 hover:bg-rose-900/80', dateBg: 'bg-rose-900/90 text-rose-200 border-rose-600/60', text: 'text-rose-300', badge: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
-      8: { name: 'September', rowBg: 'bg-indigo-950/70 hover:bg-indigo-900/80', dateBg: 'bg-indigo-900/90 text-indigo-200 border-indigo-600/60', text: 'text-indigo-300', badge: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' },
-      9: { name: 'Oktober', rowBg: 'bg-purple-950/70 hover:bg-purple-900/80', dateBg: 'bg-purple-900/90 text-purple-200 border-purple-600/60', text: 'text-purple-300', badge: 'bg-purple-500/20 text-purple-300 border-purple-500/40' },
-      10: { name: 'November', rowBg: 'bg-orange-950/70 hover:bg-orange-900/80', dateBg: 'bg-orange-900/90 text-orange-200 border-orange-600/60', text: 'text-orange-300', badge: 'bg-orange-500/20 text-orange-300 border-orange-500/40' },
-      11: { name: 'Desember', rowBg: 'bg-blue-950/70 hover:bg-blue-900/80', dateBg: 'bg-blue-900/90 text-blue-200 border-blue-600/60', text: 'text-blue-300', badge: 'bg-blue-500/20 text-blue-300 border-blue-500/40' }
-    };
-
-    const monthNamesIndo = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
-
-    // Global Data State
-    let rawDataSet = [];
-    let filteredData = [];
-    let activeCategoryFilter = 'ALL';
-    let chartAirportTotals = null;
-    let chartCategoryTotals = null;
-    let chartTrendLine = null;
-    let trendViewMode = 'daily'; // 'daily' or 'monthly'
-    let recapExportData = null;
-
-    // Table Pagination & Sort State
-    let currentPage = 1;
-    let pageSize = 25;
-    let sortColumn = 'tanggal';
-    let sortDirection = 'desc';
-
-    // Helper: Toast Notifications
-    function showToast(message, type = 'info') {
-      const container = document.getElementById('toast-container');
-      const toast = document.createElement('div');
-      
-      let bg = 'bg-slate-800 border-slate-700 text-slate-100';
-      if (type === 'success') bg = 'bg-emerald-900/90 border-emerald-600 text-emerald-100';
-      if (type === 'warning') bg = 'bg-amber-900/90 border-amber-600 text-amber-100';
-      if (type === 'error') bg = 'bg-red-900/90 border-red-600 text-red-100';
-
-      toast.className = `flex items-center space-x-2 px-4 py-3 rounded-xl border ${bg} shadow-xl text-xs backdrop-blur-md transition-all duration-300 transform translate-y-2 opacity-0`;
-      toast.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-circle-check' : 'fa-circle-info'}"></i> <span>${message}</span>`;
-      
-      container.appendChild(toast);
-      setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
-      setTimeout(() => {
-        toast.classList.add('opacity-0');
-        setTimeout(() => toast.remove(), 300);
-      }, 4000);
-    }
-
-    // Date Parsing Helper
-    function parseCustomDate(val) {
-      if (!val) return null;
-
-      if (val instanceof Date) {
-        if (isNaN(val.getTime())) return null;
-        return new Date(val.getFullYear(), val.getMonth(), val.getDate());
-      }
-
-      if (typeof val === 'number' && val > 1000) {
-        const parsed = XLSX.SSF.parse_date_code(val);
-        if (parsed && parsed.y && parsed.m) {
-          return new Date(parsed.y, parsed.m - 1, parsed.d);
-        }
-      }
-
-      let strVal = String(val).trim();
-      if (!strVal) return null;
-
-      if (!isNaN(strVal) && Number(strVal) > 1000) {
-        const num = Number(strVal);
-        const parsed = XLSX.SSF.parse_date_code(num);
-        if (parsed && parsed.y && parsed.m) {
-          return new Date(parsed.y, parsed.m - 1, parsed.d);
-        }
-      }
-
-      const monthMap = {
-        'jan': 0, 'januari': 0, 'january': 0,
-        'feb': 1, 'februari': 1, 'february': 1,
-        'mar': 2, 'maret': 2, 'march': 2,
-        'apr': 3, 'april': 3,
-        'mei': 4, 'may': 4,
-        'jun': 5, 'juni': 5, 'june': 5,
-        'jul': 6, 'juli': 6, 'july': 6,
-        'agu': 7, 'ags': 7, 'agustus': 7, 'aug': 7, 'august': 7,
-        'sep': 8, 'september': 8,
-        'okt': 9, 'oct': 9, 'oktober': 9, 'october': 9,
-        'nov': 10, 'november': 10,
-        'des': 11, 'dec': 11, 'desember': 11, 'december': 11
-      };
-
-      const textMonthRegex = /^(\d{1,2})[\s\-\/]+([a-zA-Z]+)[\s\-\/]+(\d{2,4})/;
-      const matchTextMonth = strVal.match(textMonthRegex);
-      if (matchTextMonth) {
-        const day = parseInt(matchTextMonth[1], 10);
-        const monthStr = matchTextMonth[2].toLowerCase().slice(0, 3);
-        let year = parseInt(matchTextMonth[3], 10);
-        if (year < 100) year += 2000;
-
-        if (monthMap[monthStr] !== undefined && !isNaN(day) && !isNaN(year)) {
-          return new Date(year, monthMap[monthStr], day);
-        }
-      }
-
-      const cleanStr = strVal.split(' ')[0];
-      const parts = cleanStr.split(/[\/\-\.]/);
-
-      if (parts.length === 3) {
-        let p0 = parseInt(parts[0], 10);
-        let p1 = parseInt(parts[1], 10);
-        let p2 = parseInt(parts[2], 10);
-
-        if (!isNaN(p0) && !isNaN(p1) && !isNaN(p2)) {
-          if (p0 > 1000) return new Date(p0, p1 - 1, p2);
-          if (p2 < 100) p2 += 2000;
-          if (p1 >= 1 && p1 <= 12) return new Date(p2, p1 - 1, p0);
-          if (p0 >= 1 && p0 <= 12) return new Date(p2, p0 - 1, p1);
-        }
-      }
-
-      const d = new Date(strVal);
-      if (!isNaN(d.getTime())) {
-        return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-      }
-
-      return null;
-    }
-
-    function formatDateFormatted(d) {
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${day}/${month}/${year}`;
-    }
-
-    function formatDateDayMonth(d) {
-      const day = String(d.getDate()).padStart(2, '0');
-      const month = monthNamesIndo[d.getMonth()];
-      return `${day} ${month}`;
-    }
-
-    function getAirportCode(str) {
-      if (!str) return 'LOKASI';
-      const clean = String(str).trim();
-      const match = clean.match(/\(([^)]+)\)/);
-      if (match && match[1]) return match[1].toUpperCase();
-      if (clean.length <= 5) return clean.toUpperCase();
-      return clean;
-    }
-
-    function getFuzzyRowValue(row, keywords) {
-      if (!row || typeof row !== 'object') return null;
-      const keys = Object.keys(row);
-      
-      for (const kw of keywords) {
-        const foundKey = keys.find(k => {
-          const cleanKey = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-          return cleanKey.includes(kw);
-        });
-        if (foundKey && row[foundKey] !== undefined && row[foundKey] !== '') {
-          return row[foundKey];
-        }
-      }
-      return null;
-    }
-
-    function handleFileUpload(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        try {
-          const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          const jsonResult = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-
-          if (jsonResult.length === 0) {
-            showToast('File kosong atau format tidak valid!', 'error');
-            return;
-          }
-
-          const parsedData = [];
-          let dateFallbackCount = 0;
-
-          jsonResult.forEach((row, idx) => {
-            let bandara = getFuzzyRowValue(row, ['bandara', 'airport', 'stasiun', 'sta', 'apt', 'lokasi', 'kode']) || 'PNK';
-            let tanggalRaw = getFuzzyRowValue(row, ['tanggal', 'tgl', 'date', 'waktu', 'time', 'periode', 'dt']);
-            let jenis = getFuzzyRowValue(row, ['jenis', 'kategori', 'gangguan', 'category', 'tipe', 'irregularity', 'alasan', 'sebab', 'masalah']) || 'Lain-lain';
-            let penerbangan = getFuzzyRowValue(row, ['penerbangan', 'flight', 'maskapai', 'airline', 'flt', 'pesawat']) || '-';
-            let keterangan = getFuzzyRowValue(row, ['keterangan', 'dampak', 'deskripsi', 'catatan', 'remark', 'detail', 'uraian', 'kronologis']) || '-';
-
-            if (jenis && String(jenis).toLowerCase().includes('laporan kejadian')) {
-              return;
-            }
-
-            let dtObj = parseCustomDate(tanggalRaw);
-            if (!dtObj) {
-              dtObj = new Date();
-              dateFallbackCount++;
-            }
-
-            const dtStr = formatDateFormatted(dtObj);
-
-            parsedData.push({
-              id: idx + 1,
-              bandara: String(bandara).trim(),
-              tanggalObj: dtObj,
-              tanggalStr: dtStr,
-              jenis: String(jenis).trim(),
-              penerbangan: String(penerbangan).trim(),
-              keterangan: String(keterangan).trim()
-            });
-          });
-
-          if (parsedData.length === 0) {
-            showToast('Tidak ada data valid yang dapat dimuat dari file!', 'warning');
-            return;
-          }
-
-          rawDataSet = parsedData;
-
-          const uniqueDates = Array.from(new Set(rawDataSet.map(d => d.tanggalStr)));
-          showToast(`Berhasil memuat ${rawDataSet.length} data dari ${uniqueDates.length} hari tanggal berbeda!`, 'success');
-
-          populateFilterDropdowns();
-          applyFilters();
-        } catch (err) {
-          console.error(err);
-          showToast('Gagal memproses file Excel/CSV! Pastikan format sesuai.', 'error');
-        }
-      };
-      reader.readAsArrayBuffer(file);
-    }
-
-    function generateInitialMockData() {
-      const categories = [
-        "Kabut Asap / Weather", "Cuaca Buruk / Wind", "Gangguan Teknis Runway",
-        "Keterlambatan Operational", "Gangguan Navigasi / VOR"
-      ];
-      
-      const airportTargetTotals = {
-        "PNK (Supadio)": 490,
-        "PKY (Tjilik Riwut)": 297,
-        "DJB (Sultan Thaha)": 220,
-        "BPN (SAMS Sepinggan)": 133,
-        "DJJ (Sentani)": 101,
-        "BDJ (Syamsudin Noor)": 88,
-        "PLM (Sultan Mahmud Badaruddin II)": 75,
-        "AMQ (Pattimura)": 58,
-        "PKU (Sultan Syarif Kasim II)": 14,
-        "SUB (Juanda)": 13,
-        "PGK (Depati Amir)": 9,
-        "TNJ (Raja Haji Fisabilillah)": 7,
-        "BIK (Frans Kaisiepo)": 6,
-        "UPG (Sultan Hasanuddin)": 6,
-        "YIA (Yogyakarta International)": 4,
-        "HLP (Halim Perdanakusuma)": 4,
-        "DTB (Silangit)": 2,
-        "TJQ (H.A.S. Hanandjoeddin)": 2
-      };
-
-      const airlines = ["GA-502", "JT-610", "QG-831", "ID-6220", "IW-1240"];
-
-      // Multi-Month Data Sample (Juli, Agustus, September 2026)
-      const julDates = [new Date(2026, 6, 28), new Date(2026, 6, 29), new Date(2026, 6, 30), new Date(2026, 6, 31)];
-      const augDates = [
-        new Date(2026, 7, 19), new Date(2026, 7, 20), new Date(2026, 7, 21),
-        new Date(2026, 7, 22), new Date(2026, 7, 23), new Date(2026, 7, 24),
-        new Date(2026, 7, 25), new Date(2026, 7, 26), new Date(2026, 7, 27),
-        new Date(2026, 7, 28), new Date(2026, 7, 29), new Date(2026, 7, 30)
-      ];
-      const sepDates = [new Date(2026, 8, 1), new Date(2026, 8, 2), new Date(2026, 8, 3)];
-
-      const allSampleDates = [...julDates, ...augDates, ...sepDates];
-
-      const dataset = [];
-      let currentId = 1;
-
-      Object.keys(airportTargetTotals).forEach((apt, aptIdx) => {
-        const totalToCreate = airportTargetTotals[apt];
-        for (let i = 0; i < totalToCreate; i++) {
-          const dt = allSampleDates[i % allSampleDates.length];
-          
-          // Weighted category assignment per airport for realistic top-5 variation
-          const cat = categories[(i + aptIdx) % categories.length];
-          const flight = airlines[i % airlines.length];
-          
-          dataset.push({
-            id: currentId++,
-            bandara: apt,
-            tanggalObj: new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()),
-            tanggalStr: formatDateFormatted(dt),
-            jenis: cat,
-            penerbangan: flight,
-            keterangan: `Dampak operasional jarak pandang / irregularitas jadwal pada penerbangan ${flight}`
-          });
-        }
-      });
-
-      rawDataSet = dataset;
-    }
-
-    function populateFilterDropdowns() {
-      const airportSelect = document.getElementById('filter-airport');
-      const categorySelect = document.getElementById('filter-category');
-      const categoryChipsContainer = document.getElementById('category-chips-container');
-
-      const airports = Array.from(new Set(rawDataSet.map(d => d.bandara))).sort();
-      const categories = Array.from(new Set(rawDataSet.map(d => d.jenis))).sort();
-
-      airportSelect.innerHTML = '<option value="ALL">Semua Bandar Udara</option>';
-      airports.forEach(apt => {
-        const opt = document.createElement('option');
-        opt.value = apt;
-        opt.textContent = apt;
-        airportSelect.appendChild(opt);
-      });
-
-      categorySelect.innerHTML = '<option value="ALL">Semua Jenis Gangguan</option>';
-      categories.forEach(cat => {
-        const opt = document.createElement('option');
-        opt.value = cat;
-        opt.textContent = cat;
-        categorySelect.appendChild(opt);
-      });
-
-      categoryChipsContainer.innerHTML = '';
-      
-      const allBtn = document.createElement('button');
-      allBtn.className = `px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${activeCategoryFilter === 'ALL' ? 'bg-blue-600 text-white border-blue-400 shadow-md shadow-blue-500/30' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'}`;
-      allBtn.innerHTML = `<i class="fa-solid fa-border-all mr-1.5"></i> Semua Kategori`;
-      allBtn.onclick = () => { selectCategoryFilter('ALL'); };
-      categoryChipsContainer.appendChild(allBtn);
-
-      categories.forEach((cat, idx) => {
-        const color = colorPalette[idx % colorPalette.length];
-        const btn = document.createElement('button');
-        const isActive = activeCategoryFilter === cat;
-        
-        btn.className = `px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 flex items-center space-x-1.5 ${isActive ? 'bg-slate-100 text-slate-900 border-white shadow-lg' : 'bg-slate-800/90 text-slate-300 border-slate-700 hover:bg-slate-700'}`;
-        btn.innerHTML = `<span class="w-2 h-2 rounded-full" style="background-color: ${color}"></span> <span>${cat}</span>`;
-        btn.onclick = () => { selectCategoryFilter(cat); };
-        categoryChipsContainer.appendChild(btn);
-      });
-    }
-
-    function selectCategoryFilter(cat) {
-      activeCategoryFilter = cat;
-      document.getElementById('filter-category').value = cat;
-      populateFilterDropdowns();
-      applyFilters();
-    }
-
-    function applyFilters() {
-      const selectedAirport = document.getElementById('filter-airport').value;
-      const selectedCategory = document.getElementById('filter-category').value;
-      const startDateVal = document.getElementById('filter-start-date').value;
-      const endDateVal = document.getElementById('filter-end-date').value;
-      const searchQuery = document.getElementById('table-search').value.toLowerCase().trim();
-
-      activeCategoryFilter = selectedCategory;
-
-      let result = [...rawDataSet];
-
-      if (selectedAirport !== 'ALL') {
-        result = result.filter(d => d.bandara === selectedAirport);
-      }
-
-      if (selectedCategory !== 'ALL') {
-        result = result.filter(d => d.jenis === selectedCategory);
-      }
-
-      if (startDateVal) {
-        const start = new Date(startDateVal);
-        start.setHours(0, 0, 0, 0);
-        result = result.filter(d => d.tanggalObj >= start);
-      }
-
-      if (endDateVal) {
-        const end = new Date(endDateVal);
-        end.setHours(23, 59, 59, 999);
-        result = result.filter(d => d.tanggalObj <= end);
-      }
-
-      if (searchQuery) {
-        result = result.filter(d => 
-          d.bandara.toLowerCase().includes(searchQuery) ||
-          d.jenis.toLowerCase().includes(searchQuery) ||
-          d.penerbangan.toLowerCase().includes(searchQuery) ||
-          d.keterangan.toLowerCase().includes(searchQuery) ||
-          d.tanggalStr.includes(searchQuery)
-        );
-      }
-
-      filteredData = result;
-      currentPage = 1;
-
-      const badge = document.getElementById('active-filter-badge');
-      if (selectedAirport === 'ALL' && selectedCategory === 'ALL' && !startDateVal && !endDateVal && !searchQuery) {
-        badge.textContent = 'Semua Data (' + filteredData.length + ')';
-        badge.className = 'px-2.5 py-1 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium';
-      } else {
-        badge.textContent = 'Filter Aktif (' + filteredData.length + ' data)';
-        badge.className = 'px-2.5 py-1 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium';
-      }
-
-      updateKPIs();
-      renderTrendChart();
-      renderCategoryInfographic();
-      renderRecapTable();
-      renderDataTable();
-    }
-
-    // Helper: Calculate and update KPI summary cards
-    function updateKPIs() {
-      const totalGangguan = filteredData.length;
-      document.getElementById('kpi-total-gangguan').textContent = totalGangguan.toLocaleString();
-
-      if (totalGangguan === 0) {
-        document.getElementById('kpi-total-bandara').textContent = '0';
-        document.getElementById('kpi-top-bandara-pct').textContent = '-';
-        document.getElementById('kpi-top-bandara-desc').textContent = 'Bandara terbanyak: -';
-        
-        document.getElementById('kpi-top-kategori-count').textContent = '0';
-        document.getElementById('kpi-top-kategori-pct').textContent = '-';
-        document.getElementById('kpi-top-kategori-desc').textContent = 'Kategori: -';
-        
-        document.getElementById('kpi-avg-daily').textContent = '0.0';
-        document.getElementById('kpi-range-info').textContent = 'Rentang Waktu: -';
-        return;
-      }
-
-      // 1. Unique Airports & Top Airport
-      const airportCounts = {};
-      filteredData.forEach(d => {
-        airportCounts[d.bandara] = (airportCounts[d.bandara] || 0) + 1;
-      });
-      const uniqueAirports = Object.keys(airportCounts).length;
-      document.getElementById('kpi-total-bandara').textContent = uniqueAirports;
-
-      const topAirport = Object.entries(airportCounts).sort((a, b) => b[1] - a[1])[0];
-      if (topAirport) {
-        const topAptPct = ((topAirport[1] / totalGangguan) * 100).toFixed(1);
-        document.getElementById('kpi-top-bandara-pct').textContent = `${topAptPct}%`;
-        document.getElementById('kpi-top-bandara-desc').textContent = `Terbanyak: ${topAirport[0]} (${topAirport[1]})`;
-      }
-
-      // 2. Top Category
-      const catCounts = {};
-      filteredData.forEach(d => {
-        catCounts[d.jenis] = (catCounts[d.jenis] || 0) + 1;
-      });
-      const topCategory = Object.entries(catCounts).sort((a, b) => b[1] - a[1])[0];
-      if (topCategory) {
-        const topCatPct = ((topCategory[1] / totalGangguan) * 100).toFixed(1);
-        document.getElementById('kpi-top-kategori-count').textContent = topCategory[1];
-        document.getElementById('kpi-top-kategori-pct').textContent = `${topCatPct}%`;
-        document.getElementById('kpi-top-kategori-desc').textContent = `Jenis: ${topCategory[0]}`;
-      }
-
-      // 3. Daily Average & Date Range Info
-      const dates = filteredData.map(d => d.tanggalObj.getTime()).sort((a, b) => a - b);
-      const minDate = new Date(dates[0]);
-      const maxDate = new Date(dates[dates.length - 1]);
-      
-      const dayDiff = Math.max(1, Math.round((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1);
-      const avgDaily = (totalGangguan / dayDiff).toFixed(1);
-
-      document.getElementById('kpi-avg-daily').textContent = avgDaily;
-      document.getElementById('kpi-range-info').textContent = `${formatDateFormatted(minDate)} - ${formatDateFormatted(maxDate)} (${dayDiff} Hari)`;
-    }
-
-    // Toggle Trend Mode Function
-    function setTrendMode(mode) {
-      trendViewMode = mode;
-      const btnDaily = document.getElementById('btn-trend-daily');
-      const btnMonthly = document.getElementById('btn-trend-monthly');
-
-      if (mode === 'daily') {
-        btnDaily.className = 'px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-blue-600 text-white shadow-md shadow-blue-500/30';
-        btnMonthly.className = 'px-4 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-all';
-      } else {
-        btnMonthly.className = 'px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-blue-600 text-white shadow-md shadow-blue-500/30';
-        btnDaily.className = 'px-4 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-all';
-      }
-
-      renderTrendChart();
-    }
-
-    // Render Trend Line Chart (Harian / Bulanan)
-    function renderTrendChart() {
-      const ctx = document.getElementById('chart-trend-line').getContext('2d');
-      if (chartTrendLine) chartTrendLine.destroy();
-
-      if (!filteredData || filteredData.length === 0) {
-        chartTrendLine = new Chart(ctx, {
-          type: 'line',
-          data: { labels: [], datasets: [] },
-          options: { responsive: true, maintainAspectRatio: false }
-        });
-        return;
-      }
-
-      const timeCounts = {};
-
-      if (trendViewMode === 'daily') {
-        // Group by YYYY-MM-DD
-        filteredData.forEach(d => {
-          const yyyy = d.tanggalObj.getFullYear();
-          const mm = String(d.tanggalObj.getMonth() + 1).padStart(2, '0');
-          const dd = String(d.tanggalObj.getDate()).padStart(2, '0');
-          const key = `${yyyy}-${mm}-${dd}`;
-          timeCounts[key] = (timeCounts[key] || 0) + 1;
-        });
-      } else {
-        // Group by YYYY-MM (Monthly)
-        filteredData.forEach(d => {
-          const yyyy = d.tanggalObj.getFullYear();
-          const mm = String(d.tanggalObj.getMonth() + 1).padStart(2, '0');
-          const key = `${yyyy}-${mm}`;
-          timeCounts[key] = (timeCounts[key] || 0) + 1;
-        });
-      }
-
-      const sortedKeys = Object.keys(timeCounts).sort();
-      const labels = sortedKeys;
-      const values = sortedKeys.map(k => timeCounts[k]);
-
-      // Create Gradient Fill
-      const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-      gradient.addColorStop(0, 'rgba(59, 130, 246, 0.45)');
-      gradient.addColorStop(0.8, 'rgba(59, 130, 246, 0.02)');
-      gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
-
-      chartTrendLine = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: 'Jumlah Gangguan',
-            data: values,
-            borderColor: '#38bdf8',
-            borderWidth: 2.5,
-            backgroundColor: gradient,
-            fill: true,
-            tension: 0.38, // Smooth spline curve like the screenshot
-            pointBackgroundColor: '#38bdf8',
-            pointBorderColor: '#0f172a',
-            pointBorderWidth: 1.5,
-            pointRadius: values.length > 40 ? 2 : 4,
-            pointHoverRadius: 6
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: {
-            mode: 'index',
-            intersect: false
-          },
-          layout: {
-            padding: { top: 25, right: 15, left: 10, bottom: 5 }
-          },
-          plugins: {
-            legend: { display: false },
-            datalabels: {
-              anchor: 'end',
-              align: 'top',
-              offset: 3,
-              color: '#f8fafc',
-              font: { weight: 'bold', size: labels.length > 30 ? 9 : 10 },
-              formatter: (val) => val > 0 ? val : '',
-              clip: false
-            },
-            tooltip: {
-              backgroundColor: 'rgba(15, 23, 42, 0.9)',
-              titleColor: '#38bdf8',
-              bodyColor: '#f8fafc',
-              borderColor: 'rgba(56, 189, 248, 0.3)',
-              borderWidth: 1,
-              padding: 10,
-              displayColors: false,
-              callbacks: {
-                title: (items) => {
-                  const raw = items[0].label;
-                  if (trendViewMode === 'monthly') {
-                    const [y, m] = raw.split('-');
-                    return `Bulan ${monthNamesIndo[parseInt(m,10)-1]} ${y}`;
-                  }
-                  return `Tanggal: ${raw}`;
-                },
-                label: (item) => ` Total Gangguan: ${item.raw} kejadian`
-              }
-            }
-          },
-          scales: {
-            x: {
-              grid: {
-                color: 'rgba(255, 255, 255, 0.04)',
-                drawBorder: false
-              },
-              ticks: {
-                color: '#64748b',
-                font: { size: 10, weight: '500' },
-                maxRotation: 0,
-                autoSkip: true,
-                maxTicksLimit: 12
-              }
-            },
-            y: {
-              grace: '20%',
-              grid: {
-                color: 'rgba(255, 255, 255, 0.05)',
-                drawBorder: false
-              },
-              ticks: {
-                color: '#64748b',
-                font: { size: 10 }
-              }
-            }
-          }
-        }
-      });
-    }
-
-    function renderCategoryInfographic() {
-      const categoryDataMap = {};
-      const grandTotal = filteredData.length;
-
-      filteredData.forEach(d => {
-        const cat = d.jenis;
-        const apt = d.bandara;
-
-        if (!categoryDataMap[cat]) {
-          categoryDataMap[cat] = {
-            total: 0,
-            airports: {}
-          };
-        }
-
-        categoryDataMap[cat].total += 1;
-        categoryDataMap[cat].airports[apt] = (categoryDataMap[cat].airports[apt] || 0) + 1;
-      });
-
-      const sortedCategories = Object.entries(categoryDataMap).sort((a, b) => b[1].total - a[1].total);
-      const catLabels = sortedCategories.map(item => item[0]);
-      const catTotals = sortedCategories.map(item => item[1].total);
-      const colors = catLabels.map((_, i) => colorPalette[i % colorPalette.length]);
-
-      // Render Doughnut / Pie Chart
-      const ctx = document.getElementById('chart-category-totals').getContext('2d');
-      if (chartCategoryTotals) chartCategoryTotals.destroy();
-
-      chartCategoryTotals = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-          labels: catLabels,
-          datasets: [{
-            data: catTotals,
-            backgroundColor: colors,
-            borderColor: '#0f172a',
-            borderWidth: 2
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              position: 'bottom',
-              labels: {
-                color: '#cbd5e1',
-                font: { size: 10 },
-                boxWidth: 12,
-                padding: 10
-              }
-            },
-            datalabels: {
-              color: '#ffffff',
-              font: { weight: 'bold', size: 10 },
-              formatter: (value) => {
-                if (grandTotal === 0 || value === 0) return '';
-                const pct = ((value / grandTotal) * 100).toFixed(0);
-                return pct > 4 ? `${pct}%` : '';
-              }
-            },
-            tooltip: {
-              callbacks: {
-                label: (ctx) => {
-                  const val = ctx.raw;
-                  const pct = grandTotal > 0 ? ((val / grandTotal) * 100).toFixed(1) : 0;
-                  return ` ${ctx.label}: ${val} insiden (${pct}%)`;
-                }
-              }
-            }
-          },
-          cutout: '60%'
-        }
-      });
-
-      // Render Breakdown Cards for Top 5 Airports per Category
-      const container = document.getElementById('category-top-airports-cards');
-      container.innerHTML = '';
-
-      if (sortedCategories.length === 0) {
-        container.innerHTML = `<div class="col-span-2 text-center text-xs text-slate-500 py-8">Tidak ada data jenis gangguan yang cocok.</div>`;
-        return;
-      }
-
-      sortedCategories.forEach(([catName, catInfo], idx) => {
-        const color = colors[idx];
-        const catPct = grandTotal > 0 ? ((catInfo.total / grandTotal) * 100).toFixed(1) : '0.0';
-
-        // Sort Top Airports for this category
-        const sortedAirports = Object.entries(catInfo.airports)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5); // Take Top 5
-
-        const card = document.createElement('div');
-        card.className = 'glass-card p-3.5 rounded-xl border border-slate-800 flex flex-col justify-between space-y-2.5 hover:border-slate-700 transition-all';
-
-        let topListHtml = '';
-        sortedAirports.forEach(([aptName, count], rank) => {
-          const aptCode = getAirportCode(aptName);
-          const aptPct = ((count / catInfo.total) * 100).toFixed(0);
-          topListHtml += `
-            <div class="flex items-center justify-between text-xs py-0.5 border-b border-slate-800/60 last:border-none">
-              <div class="flex items-center space-x-1.5 truncate">
-                <span class="w-4 h-4 rounded text-[9px] font-bold bg-slate-800 text-slate-300 flex items-center justify-center flex-shrink-0">${rank + 1}</span>
-                <span class="font-semibold text-slate-200 truncate" title="${aptName}">${aptCode}</span>
-              </div>
-              <div class="flex items-center space-x-1 flex-shrink-0 text-right">
-                <span class="font-extrabold text-emerald-400">${count}</span>
-                <span class="text-[10px] text-slate-400">(${aptPct}%)</span>
-              </div>
-            </div>
-          `;
-        });
-
-        card.innerHTML = `
-          <div>
-            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-              <div class="flex items-center space-x-2 truncate">
-                <span class="w-3 h-3 rounded-full flex-shrink-0" style="background-color: ${color}"></span>
-                <h4 class="font-bold text-xs text-white truncate" title="${catName}">${catName}</h4>
-              </div>
-              <span class="text-xs font-black text-white px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 flex-shrink-0 ml-1">
-                ${catInfo.total} <span class="text-[10px] font-normal text-slate-400">(${catPct}%)</span>
-              </span>
-            </div>
-            <div class="mt-2.5 space-y-1">
-              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Top Bandara Terdampak:</span>
-              ${topListHtml}
-            </div>
-          </div>
-        `;
-
-        container.appendChild(card);
-      });
-    }
-
-    function renderRecapTable() {
-      const head = document.getElementById('recap-table-head');
-      const body = document.getElementById('recap-table-body');
-      const foot = document.getElementById('recap-table-foot');
-      const legendContainer = document.getElementById('recap-month-legend');
-
-      if (!filteredData || filteredData.length === 0) {
-        head.innerHTML = '<tr><th class="p-3 text-center">Tidak ada data</th></tr>';
-        body.innerHTML = '<tr><td class="p-4 text-center text-slate-400">Tidak ada data gangguan yang sesuai filter.</td></tr>';
-        foot.innerHTML = '';
-        if (legendContainer) legendContainer.innerHTML = '';
-        return;
-      }
-
-      const airportCodeMap = {};
-      filteredData.forEach(d => {
-        const code = getAirportCode(d.bandara);
-        if (!airportCodeMap[code]) airportCodeMap[code] = d.bandara;
-      });
-      const airportCodes = Object.keys(airportCodeMap).sort();
-
-      const dateGroups = {};
-      filteredData.forEach(d => {
-        const isoDate = `${d.tanggalObj.getFullYear()}-${String(d.tanggalObj.getMonth() + 1).padStart(2, '0')}-${String(d.tanggalObj.getDate()).padStart(2, '0')}`;
-        if (!dateGroups[isoDate]) {
-          dateGroups[isoDate] = {
-            dateObj: d.tanggalObj,
-            formattedLabel: formatDateDayMonth(d.tanggalObj),
-            counts: {}
-          };
-        }
-        const code = getAirportCode(d.bandara);
-        dateGroups[isoDate].counts[code] = (dateGroups[isoDate].counts[code] || 0) + 1;
-      });
-
-      const sortedIsoDates = Object.keys(dateGroups).sort();
-
-      const detectedMonths = new Set();
-      sortedIsoDates.forEach(isoKey => {
-        detectedMonths.add(dateGroups[isoKey].dateObj.getMonth());
-      });
-
-      if (legendContainer) {
-        legendContainer.innerHTML = '<span class="text-slate-400 font-semibold mr-1">Legenda Warna Bulan:</span>';
-        Array.from(detectedMonths).sort((a,b) => a-b).forEach(mIdx => {
-          const mInfo = monthColorMap[mIdx] || monthColorMap[0];
-          const badge = document.createElement('span');
-          badge.className = `px-2 py-0.5 rounded text-[11px] font-medium border ${mInfo.badge}`;
-          badge.textContent = mInfo.name;
-          legendContainer.appendChild(badge);
-        });
-      }
-
-      // Header Row
-      let headHtml = `
-        <tr>
-          <th class="px-3 py-2.5 text-left bg-slate-800 text-slate-300 font-bold sticky left-0 z-30 min-w-[110px] border-r border-slate-700">TANGGAL & BULAN</th>
-      `;
-      airportCodes.forEach(code => {
-        headHtml += `<th class="px-2.5 py-2.5 text-center font-bold text-slate-300 border-r border-slate-700/50 min-w-[50px]">${code}</th>`;
-      });
-      headHtml += `<th class="px-3 py-2.5 text-center bg-blue-950/80 text-blue-200 font-extrabold sticky right-0 z-30 min-w-[80px] border-l border-slate-700">TOTAL</th></tr>`;
-      head.innerHTML = headHtml;
-
-      // Body Rows with Distinct Month Colors
-      let bodyHtml = '';
-      const airportTotals = {};
-      airportCodes.forEach(c => airportTotals[c] = 0);
-      let grandTotal = 0;
-
-      const exportRows = [];
-
-      sortedIsoDates.forEach(isoKey => {
-        const item = dateGroups[isoKey];
-        const mIdx = item.dateObj.getMonth();
-        const mStyle = monthColorMap[mIdx] || monthColorMap[0];
-
-        let rowTotal = 0;
-
-        let rowHtml = `
-          <tr class="${mStyle.rowBg} transition-colors border-b border-slate-800/80">
-            <td class="px-3 py-2 text-left font-bold ${mStyle.dateBg} sticky left-0 z-10 border-r border-slate-700 whitespace-nowrap shadow-sm">
-              ${item.formattedLabel}
-            </td>
-        `;
-
-        const exportRow = { 'Tanggal & Bulan': item.formattedLabel };
-
-        airportCodes.forEach(code => {
-          const val = item.counts[code] || 0;
-          rowTotal += val;
-          airportTotals[code] += val;
-          exportRow[code] = val;
-
-          if (val > 0) {
-            rowHtml += `<td class="px-2.5 py-2 text-center font-bold text-white border-r border-slate-800/60 bg-slate-900/30">${val}</td>`;
-          } else {
-            rowHtml += `<td class="px-2.5 py-2 text-center text-slate-500/60 border-r border-slate-800/60">0</td>`;
-          }
-        });
-
-        grandTotal += rowTotal;
-        exportRow['TOTAL'] = rowTotal;
-        exportRows.push(exportRow);
-
-        rowHtml += `
-            <td class="px-3 py-2 text-center font-black text-blue-200 bg-blue-950/60 sticky right-0 z-10 border-l border-slate-700">
-              ${rowTotal}
-            </td>
-          </tr>
-        `;
-        bodyHtml += rowHtml;
-      });
-
-      body.innerHTML = bodyHtml;
-
-      // Footer Row
-      let footHtml = `
-        <tr>
-          <td class="px-3 py-2.5 text-left font-extrabold text-amber-400 bg-slate-900 sticky left-0 z-30 border-r border-slate-700 uppercase">
-            TOTAL
-          </td>
-      `;
-
-      const exportFooter = { 'Tanggal & Bulan': 'TOTAL' };
-
-      airportCodes.forEach(code => {
-        const tot = airportTotals[code];
-        exportFooter[code] = tot;
-        footHtml += `<td class="px-2.5 py-2.5 text-center font-extrabold text-amber-300 border-r border-slate-700">${tot}</td>`;
-      });
-
-      exportFooter['TOTAL'] = grandTotal;
-      footHtml += `
-          <td class="px-3 py-2.5 text-center font-black text-emerald-400 bg-emerald-950/80 sticky right-0 z-30 border-l border-slate-700">
-            ${grandTotal}
-          </td>
-        </tr>
-      `;
-      foot.innerHTML = footHtml;
-
-      exportRows.push(exportFooter);
-      recapExportData = exportRows;
-    }
-
-    function exportRecapToExcel() {
-      if (!recapExportData || recapExportData.length === 0) {
-        showToast('Tidak ada data rekapitulasi untuk diunduh!', 'warning');
-        return;
-      }
-
-      try {
-        const ws = XLSX.utils.json_to_sheet(recapExportData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Rekapitulasi Gangguan");
-        XLSX.writeFile(wb, `Rekapitulasi_Gangguan_Harian_${new Date().toISOString().slice(0, 10)}.xlsx`);
-        showToast('Tabel rekapitulasi berhasil diunduh dalam format Excel!', 'success');
-      } catch (err) {
-        console.error(err);
-        showToast('Gagal mengunduh file Excel.', 'error');
-      }
-    }
-
-    function renderDataTable() {
-      const tbody = document.getElementById('table-body');
-      const info = document.getElementById('table-info');
-      const pagination = document.getElementById('table-pagination');
-
-      if (filteredData.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="5" class="px-4 py-8 text-center text-slate-500">
-              <i class="fa-solid fa-inbox text-3xl mb-2 block opacity-40"></i>
-              Tidak ada data gangguan yang memenuhi kriteria filter.
-            </td>
-          </tr>
-        `;
-        info.textContent = 'Menampilkan 0 dari 0 data';
-        pagination.innerHTML = '';
-        return;
-      }
-
-      const sorted = [...filteredData].sort((a, b) => {
-        let valA = a[sortColumn];
-        let valB = b[sortColumn];
-
-        if (sortColumn === 'tanggal') {
-          valA = a.tanggalObj.getTime();
-          valB = b.tanggalObj.getTime();
-        }
-
-        if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
-        if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
-        return 0;
-      });
-
-      const totalItems = sorted.length;
-      const totalPages = Math.ceil(totalItems / pageSize);
-      if (currentPage > totalPages) currentPage = totalPages;
-
-      const startIndex = (currentPage - 1) * pageSize;
-      const pageData = sorted.slice(startIndex, startIndex + pageSize);
-
-      let bodyHtml = '';
-      pageData.forEach(item => {
-        bodyHtml += `
-          <tr class="hover:bg-slate-800/60 transition-colors border-b border-slate-800/60">
-            <td class="px-4 py-3 font-semibold text-slate-200 whitespace-nowrap">${item.tanggalStr}</td>
-            <td class="px-4 py-3 font-bold text-white whitespace-nowrap">
-              <span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 mr-1.5">${getAirportCode(item.bandara)}</span>
-              ${item.bandara}
-            </td>
-            <td class="px-4 py-3 text-slate-300">
-              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 font-medium">
-                ${item.jenis}
-              </span>
-            </td>
-            <td class="px-4 py-3 text-slate-300 font-medium">${item.penerbangan}</td>
-            <td class="px-4 py-3 text-slate-400 max-w-md truncate" title="${item.keterangan}">${item.keterangan}</td>
-          </tr>
-        `;
-      });
-      tbody.innerHTML = bodyHtml;
-
-      const endItem = Math.min(startIndex + pageSize, totalItems);
-      info.textContent = `Menampilkan ${startIndex + 1} - ${endItem} dari ${totalItems} data`;
-
-      let pageHtml = `
-        <button onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled class="px-2.5 py-1 rounded bg-slate-800 text-slate-600 cursor-not-allowed"' : 'class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"'}>
-          <i class="fa-solid fa-chevron-left"></i>
-        </button>
-      `;
-
-      for (let p = 1; p <= totalPages; p++) {
-        if (p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1)) {
-          pageHtml += `
-            <button onclick="goToPage(${p})" class="px-3 py-1 rounded text-xs font-semibold ${p === currentPage ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'}">
-              ${p}
-            </button>
-          `;
-        } else if (p === currentPage - 2 || p === currentPage + 2) {
-          pageHtml += `<span class="text-slate-600 px-1">...</span>`;
-        }
-      }
-
-      pageHtml += `
-        <button onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled class="px-2.5 py-1 rounded bg-slate-800 text-slate-600 cursor-not-allowed"' : 'class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"'}>
-          <i class="fa-solid fa-chevron-right"></i>
-        </button>
-      `;
-      pagination.innerHTML = pageHtml;
-    }
-
-    function sortTable(col) {
-      if (sortColumn === col) {
-        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-      } else {
-        sortColumn = col;
-        sortDirection = 'desc';
-      }
-      renderDataTable();
-    }
-
-    function goToPage(page) {
-      const totalPages = Math.ceil(filteredData.length / pageSize);
-      if (page >= 1 && page <= totalPages) {
-        currentPage = page;
-        renderDataTable();
-      }
-    }
-
-    function changePageSize() {
-      pageSize = parseInt(document.getElementById('table-page-size').value, 10);
-      currentPage = 1;
-      renderDataTable();
-    }
-
-    function exportToCSV() {
-      if (filteredData.length === 0) {
-        showToast('Tidak ada data untuk diekspor!', 'warning');
-        return;
-      }
-
-      try {
-        const exportData = filteredData.map(d => ({
-          'Tanggal': d.tanggalStr,
-          'Bandar Udara': d.bandara,
-          'Jenis Gangguan': d.jenis,
-          'No. Penerbangan': d.penerbangan,
-          'Keterangan / Dampak': d.keterangan
+        const generated = Array.from({ length: 35 }, (_, i) => ({
+          id: i + 1,
+          tanggal: `2026-10-${String((i % 15) + 1).padStart(2, '0')}`,
+          bandara: mockAirports[i % mockAirports.length],
+          jenis: mockCategories[i % mockCategories.length],
+          penerbangan: `GA-${100 + i}`,
+          keterangan: `Laporan insiden penerbangan ke-${i + 1}`
         }));
 
-        const ws = XLSX.utils.json_to_sheet(exportData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Data Gangguan");
-        XLSX.writeFile(wb, `Data_Gangguan_Bandara_${new Date().toISOString().slice(0, 10)}.xlsx`);
-        showToast('Data berhasil diekspor ke file Excel/CSV!', 'success');
-      } catch (err) {
-        console.error(err);
-        showToast('Gagal mengekspor data.', 'error');
-      }
+        setData(generated);
+      }, []);
+
+      // Handlers
+      const handleFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setLoading(true);
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const dataBuffer = new Uint8Array(evt.target.result);
+            const workbook = XLSX.read(dataBuffer, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const rawJson = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+            const parsed = rawJson.map((row, idx) => ({
+              id: idx + 1,
+              tanggal: row.Tanggal || row.tanggal || '2026-10-01',
+              bandara: row.Bandara || row.bandara || 'LOKASI',
+              jenis: row.Jenis || row.jenis || 'Lain-lain',
+              penerbangan: row.Penerbangan || row.penerbangan || '-',
+              keterangan: row.Keterangan || row.keterangan || '-'
+            }));
+
+            setData(parsed);
+            setLoading(false);
+          } catch (err) {
+            alert('Gagal memproses file Excel!');
+            setLoading(false);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      };
+
+      // Filter Data
+      const filteredData = useMemo(() => {
+        return data.filter(item => {
+          const matchAirport = selectedAirport === 'All' || item.bandara === selectedAirport;
+          const matchCategory = selectedCategory === 'All' || item.jenis === selectedCategory;
+          const matchSearch = item.bandara.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              item.jenis.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              item.penerbangan.toLowerCase().includes(searchTerm.toLowerCase());
+          return matchAirport && matchCategory && matchSearch;
+        });
+      }, [data, selectedAirport, selectedCategory, searchTerm]);
+
+      // Chart Data aggregations
+      const categoryChartData = useMemo(() => {
+        const counts = {};
+        filteredData.forEach(d => { counts[d.jenis] = (counts[d.jenis] || 0) + 1; });
+        return Object.keys(counts).map(key => ({ name: key, value: counts[key] }));
+      }, [filteredData]);
+
+      return (
+        <div class="min-h-screen flex flex-col">
+          {/* Header */}
+          <header class="sticky top-0 z-40 glass-card border-b border-slate-800 bg-slate-900/90 backdrop-blur-md">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+              <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                  <i class="fa-solid fa-plane-arrival text-white text-lg"></i>
+                </div>
+                <div>
+                  <h1 class="text-lg font-bold text-white tracking-wide leading-tight">MONITORING GANGGUAN BANDARA</h1>
+                  <p class="text-xs text-slate-400">Sistem Tracking & Analisis Irregularitas Penerbangan</p>
+                </div>
+              </div>
+
+              <div class="flex items-center space-x-3">
+                <label class="cursor-pointer inline-flex items-center space-x-2 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs sm:text-sm transition-all shadow-lg shadow-emerald-900/30">
+                  <i class="fa-solid fa-file-excel"></i>
+                  <span>Upload Excel</span>
+                  <input type="file" accept=".xlsx, .xls, .csv" class="hidden" onChange={handleFileUpload} />
+                </label>
+              </div>
+            </div>
+          </header>
+
+          <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+            {/* KPI Cards */}
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div class="glass-card rounded-2xl p-4 border border-slate-800">
+                <div class="text-xs font-semibold text-slate-400 uppercase">Total Gangguan</div>
+                <div class="text-3xl font-extrabold text-white mt-1">{filteredData.length}</div>
+              </div>
+              <div class="glass-card rounded-2xl p-4 border border-slate-800">
+                <div class="text-xs font-semibold text-slate-400 uppercase">Bandara Terdampak</div>
+                <div class="text-3xl font-extrabold text-amber-400 mt-1">
+                  {new Set(filteredData.map(d => d.bandara)).size}
+                </div>
+              </div>
+              <div class="glass-card rounded-2xl p-4 border border-slate-800">
+                <div class="text-xs font-semibold text-slate-400 uppercase">Kategori Gangguan</div>
+                <div class="text-3xl font-extrabold text-red-400 mt-1">
+                  {new Set(filteredData.map(d => d.jenis)).size}
+                </div>
+              </div>
+              <div class="glass-card rounded-2xl p-4 border border-slate-800">
+                <div class="text-xs font-semibold text-slate-400 uppercase">Status Upload</div>
+                <div class="text-3xl font-extrabold text-emerald-400 mt-1">{loading ? 'Memuat...' : 'Aktif'}</div>
+              </div>
+            </div>
+
+            {/* Filter Controls */}
+            <div class="glass-card rounded-2xl p-5 space-y-4">
+              <h3 class="text-sm font-bold text-white tracking-wide uppercase">Filter & Pencarian</h3>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-400 mb-1">Bandar Udara</label>
+                  <select 
+                    value={selectedAirport} 
+                    onChange={(e) => setSelectedAirport(e.target.value)}
+                    class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-xl p-2.5 outline-none focus:border-blue-500"
+                  >
+                    <option value="All">Semua Bandar Udara</option>
+                    {[...new Set(data.map(d => d.bandara))].map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-400 mb-1">Jenis Gangguan</label>
+                  <select 
+                    value={selectedCategory} 
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-xl p-2.5 outline-none focus:border-blue-500"
+                  >
+                    <option value="All">Semua Jenis Gangguan</option>
+                    {[...new Set(data.map(d => d.jenis))].map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-400 mb-1">Cari Keywords</label>
+                  <input 
+                    type="text" 
+                    placeholder="Cari flight, bandara..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-xl p-2.5 outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Data Table */}
+            <div class="glass-card rounded-2xl p-5 space-y-4">
+              <h3 class="text-sm font-bold text-white tracking-wide uppercase">Log Data Detail Gangguan</h3>
+              <div class="overflow-x-auto rounded-xl border border-slate-800">
+                <table class="w-full text-xs text-left">
+                  <thead class="bg-slate-800 text-slate-300 uppercase font-semibold border-b border-slate-700">
+                    <tr>
+                      <th class="px-4 py-3">Tanggal</th>
+                      <th class="px-4 py-3">Bandar Udara</th>
+                      <th class="px-4 py-3">Jenis Gangguan</th>
+                      <th class="px-4 py-3">Penerbangan</th>
+                      <th class="px-4 py-3">Keterangan</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-800">
+                    {filteredData.length > 0 ? (
+                      filteredData.map(row => (
+                        <tr key={row.id} class="hover:bg-slate-800/50 transition-colors">
+                          <td class="px-4 py-3 font-medium text-blue-400">{row.tanggal}</td>
+                          <td class="px-4 py-3 text-white">{row.bandara}</td>
+                          <td class="px-4 py-3">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                              {row.jenis}
+                            </span>
+                          </td>
+                          <td class="px-4 py-3 text-slate-300">{row.penerbangan}</td>
+                          <td class="px-4 py-3 text-slate-400">{row.keterangan}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="5" class="px-4 py-8 text-center text-slate-500">Tidak ada data ditemukan</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </main>
+        </div>
+      );
     }
 
-    function resetFilters() {
-      const airportSelect = document.getElementById('filter-airport');
-      const categorySelect = document.getElementById('filter-category');
-      const startDate = document.getElementById('filter-start-date');
-      const endDate = document.getElementById('filter-end-date');
-      const searchInput = document.getElementById('table-search');
-
-      if (airportSelect) airportSelect.value = 'ALL';
-      if (categorySelect) categorySelect.value = 'ALL';
-      if (startDate) startDate.value = '';
-      if (endDate) endDate.value = '';
-      if (searchInput) searchInput.value = '';
-
-      activeCategoryFilter = 'ALL';
-
-      populateFilterDropdowns();
-      applyFilters();
-      showToast('Semua filter telah direset.', 'info');
-    }
-
-    window.setTrendMode = setTrendMode;
-    window.handleFileUpload = handleFileUpload;
-    window.exportToCSV = exportToCSV;
-    window.resetFilters = resetFilters;
-    window.applyFilters = applyFilters;
-    window.exportRecapToExcel = exportRecapToExcel;
-    window.sortTable = sortTable;
-    window.goToPage = goToPage;
-    window.changePageSize = changePageSize;
-
-    window.onload = function() {
-      generateInitialMockData();
-      populateFilterDropdowns();
-      applyFilters();
-    };
+    // Render ke HTML DOM
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
   </script>
+</body>
+</html>
