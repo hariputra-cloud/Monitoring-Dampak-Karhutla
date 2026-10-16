@@ -1,779 +1,1480 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  LineChart, Line, PieChart, Pie, Cell, Sector, Area, AreaChart, LabelList
-} from 'recharts';
-import { AlertCircle, PieChart as PieChartIcon, BarChart3, TrendingUp, MapPin, Activity, FileSpreadsheet, UploadCloud, CheckCircle2, ShieldAlert, Calendar } from 'lucide-react';
-
-// Warna-warna neon kontras tinggi khas dark dashboard
-const COLORS = ['#38bdf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#2dd4bf', '#fb923c', '#a3e635', '#22d3ee'];
-
-// Fungsi parser tanggal (format: DD/MM/YYYY) - Diubah untuk mengabaikan jam
-function parseDateString(val) {
-  if (!val) return new Date();
+<!DOCTYPE html>
+<html lang="id" class="h-full bg-slate-900 text-slate-100">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard Monitoring Gangguan Bandar Udara</title>
   
-  // Jika formatnya sudah object Date (bawaan Excel)
-  if (val instanceof Date) {
-    return new Date(val.getFullYear(), val.getMonth(), val.getDate());
-  }
-  
-  // Jika formatnya angka (serial number Excel)
-  if (typeof val === 'number') {
-     const d = new Date(Math.round((val - 25569) * 86400 * 1000));
-     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  }
-  
-  let strVal = String(val).trim();
-  
-  // Abaikan format jam dengan mengambil string sebelum spasi atau huruf 'T' (jika ISO)
-  // Contoh "30/09/2026 14:30" akan menjadi "30/09/2026"
-  strVal = strVal.split(' ')[0];
-  strVal = strVal.split('T')[0];
-  
-  const parts = strVal.split(/[-/]/);
-  
-  if (parts.length === 3) {
-    if (parts[2].length === 4) {
-      return new Date(parts[2], parseInt(parts[1]) - 1, parts[0]);
-    }
-    if (parts[0].length === 4) {
-      return new Date(parts[0], parseInt(parts[1]) - 1, parts[2]);
-    }
-  }
-  
-  const d = new Date(strVal);
-  if (isNaN(d.getTime())) return new Date();
-
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-const CustomTooltip = ({ active, payload, label }) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-slate-800/95 backdrop-blur-sm p-4 rounded-xl shadow-2xl border border-slate-700">
-        <p className="font-semibold text-slate-200 mb-3 border-b border-slate-700 pb-2">{label}</p>
-        {payload.map((entry, index) => (
-          <p key={`item-${index}`} className="text-sm flex items-center justify-between gap-4 mb-1" style={{ color: entry.color || entry.fill }}>
-            <span className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full inline-block shadow-[0_0_8px_currentColor]" style={{ backgroundColor: entry.color || entry.fill }}></span>
-                {entry.name}
-            </span>
-            <span className="font-bold text-slate-100">{entry.value}</span>
-          </p>
-        ))}
-      </div>
-    );
-  }
-  return null;
-};
-
-const renderActiveShape = (props) => {
-  const RADIAN = Math.PI / 180;
-  const { cx, cy, midAngle, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value } = props;
-  const sin = Math.sin(-RADIAN * midAngle);
-  const cos = Math.cos(-RADIAN * midAngle);
-  const sx = cx + (outerRadius + 10) * cos;
-  const sy = cy + (outerRadius + 10) * sin;
-  const mx = cx + (outerRadius + 30) * cos;
-  const my = cy + (outerRadius + 30) * sin;
-  const ex = mx + (cos >= 0 ? 1 : -1) * 22;
-  const ey = my;
-  const textAnchor = cos >= 0 ? 'start' : 'end';
-
-  return (
-    <g>
-      <text x={cx} y={cy} dy={-5} textAnchor="middle" fill="#f8fafc" className="font-bold text-base">
-        {payload.name.length > 15 ? payload.name.substring(0, 15) + '...' : payload.name}
-      </text>
-      <text x={cx} y={cy} dy={15} textAnchor="middle" fill="#94a3b8" className="text-xs font-medium">
-        {value} Terdata
-      </text>
-      <Sector
-        cx={cx}
-        cy={cy}
-        innerRadius={innerRadius}
-        outerRadius={outerRadius + 5}
-        startAngle={startAngle}
-        endAngle={endAngle}
-        fill={fill}
-        className="drop-shadow-md"
-      />
-      <Sector
-        cx={cx}
-        cy={cy}
-        startAngle={startAngle}
-        endAngle={endAngle}
-        innerRadius={outerRadius + 10}
-        outerRadius={outerRadius + 14}
-        fill={fill}
-      />
-      <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" strokeWidth={2} />
-      <circle cx={ex} cy={ey} r={3} fill={fill} stroke="none" className="drop-shadow-[0_0_5px_currentColor]" />
-      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} textAnchor={textAnchor} fill="#e2e8f0" className="text-sm font-medium">{`${value} Data`}</text>
-      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} dy={18} textAnchor={textAnchor} fill="#38bdf8" className="text-xs font-bold">
-        {`(${(percent * 100).toFixed(1)}%)`}
-      </text>
-    </g>
-  );
-};
-
-// Custom Label untuk Pie Chart agar nilai proporsional di tengah potongan
-const renderCustomizedPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, value }) => {
-  const RADIAN = Math.PI / 180;
-  // Letakkan label di tengah-tengah ketebalan donat
-  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-  const x = cx + radius * Math.cos(-midAngle * RADIAN);
-  const y = cy + radius * Math.sin(-midAngle * RADIAN);
-
-  // Sembunyikan label jika porsinya terlalu kecil (< 5%) agar teks tidak menumpuk/berantakan
-  if (percent < 0.05) return null;
-
-  return (
-    <text x={x} y={y} fill="#ffffff" textAnchor="middle" dominantBaseline="central" fontSize={13} fontWeight="bold" style={{ textShadow: '0px 2px 4px rgba(0,0,0,0.8)' }}>
-      {value}
-    </text>
-  );
-};
-
-export default function App() {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [fileName, setFileName] = useState(null);
-  
-  const [selectedAirport, setSelectedAirport] = useState('All');
-  const [timeView, setTimeView] = useState('daily');
-  const [activeIndexTypes, setActiveIndexTypes] = useState(0);
-  const [activeIndexAirports, setActiveIndexAirports] = useState(0);
-  const [isSheetJSLoaded, setIsSheetJSLoaded] = useState(false);
-  
-  // State untuk filter periode tanggal
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  
-  const fileInputRef = useRef(null);
-
-  useEffect(() => {
-    if (window.XLSX) {
-      setIsSheetJSLoaded(true);
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    script.async = true;
-    script.onload = () => setIsSheetJSLoaded(true);
-    document.body.appendChild(script);
-  }, []);
-
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    setLoading(true);
-    setError(null);
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const arrayBuffer = evt.target.result;
-        const dataUint8 = new Uint8Array(arrayBuffer);
-        const workbook = window.XLSX.read(dataUint8, { type: 'array', cellDates: true });
-        
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        
-        // 1. Cari baris header yang sebenarnya (mengatasi file yang punya judul/kop laporan di baris atas)
-        const rawData = window.XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-        let headerRowIndex = 0;
-        let maxScore = -1;
-        
-        for (let i = 0; i < Math.min(20, rawData.length); i++) {
-            const row = rawData[i];
-            if (!row || !Array.isArray(row)) continue;
-            
-            let score = 0;
-            const rowStr = row.map(cell => String(cell).toLowerCase()).join(' ');
-            
-            // Poin deteksi keyword header
-            if (rowStr.match(/tanggal|date|waktu|hari|tgl/)) score += 3;
-            if (rowStr.match(/bandara|airport|stasiun|station|lokasi|branch|cabang/)) score += 3;
-            if (rowStr.match(/jenis|kategori|type|gangguan|irreg|masalah/)) score += 3;
-            
-            // Tambah poin jika banyak kolom berisi string (indikasi kuat ini adalah header sesungguhnya)
-            score += row.filter(cell => typeof cell === 'string' && cell.trim() !== '').length * 0.5;
-            
-            if (score > maxScore) {
-                maxScore = score;
-                headerRowIndex = i;
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f7ff',
+              100: '#e0effe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              900: '#0f172a'
             }
+          }
         }
-
-        // 2. Baca ulang data menggunakan index header yang sudah terdeteksi akurat
-        const jsonData = window.XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex, defval: '' });
-
-        if (!jsonData || jsonData.length === 0) throw new Error("Data Excel kosong atau format tabel tidak ditemukan.");
-
-        const headers = Object.keys(jsonData[0]);
-        
-        // 3. Pencarian kolom dengan regex yang diperluas
-        const findCol = (regex) => headers.find(h => h && String(h).toLowerCase().match(regex));
-        
-        let dateCol = findCol(/tanggal|date|waktu|hari|tgl/i);
-        let airportCol = findCol(/bandara|airport|stasiun|station|lokasi|branch|cabang/i);
-        let typeCol = findCol(/jenis|kategori|type|gangguan|irreg|masalah|deskripsi|keterangan/i);
-
-        // Fallback jika tidak ditemukan (ambil 3 kolom pertama yang tidak kosong)
-        const validHeaders = headers.filter(h => h && !h.startsWith('__EMPTY'));
-        if (!dateCol) dateCol = validHeaders[0] || headers[0];
-        if (!airportCol) airportCol = validHeaders[1] || headers[1];
-        if (!typeCol) typeCol = validHeaders[2] || headers[2];
-
-        const processedData = jsonData.map(row => {
-          const rawDate = row[dateCol];
-          const parsedDate = parseDateString(rawDate);
-          
-          // Gunakan format lokal manual untuk menghindari pergeseran hari akibat perbedaan zona waktu
-          const yyyy = parsedDate.getFullYear();
-          const mm = String(parsedDate.getMonth() + 1).padStart(2, '0');
-          const dd = String(parsedDate.getDate()).padStart(2, '0');
-          
-          const dateStr = `${yyyy}-${mm}-${dd}`;
-          const monthStr = `${yyyy}-${mm}`;
-          
-          const airportVal = row[airportCol] ? String(row[airportCol]).trim() : '';
-          const typeVal = row[typeCol] ? String(row[typeCol]).trim() : '';
-          
-          return {
-            date: parsedDate,
-            dateStr,
-            monthStr,
-            airport: airportVal || 'Tanpa Bandara',
-            type: typeVal || 'Lain-lain',
-            rawDateStr: String(rawDate).toLowerCase() // untuk pengecekan baris header
-          };
-        }).filter(d => {
-            // Evaluasi baris: Buang jika terbaca sebagai judul kolom agar total data akurat (922)
-            const isHeader = String(d.type).toLowerCase() === String(typeCol).toLowerCase() || 
-                             d.rawDateStr.includes('tanggal') || 
-                             d.rawDateStr.includes('date') ||
-                             String(d.airport).toLowerCase().includes('bandara');
-            const isValidDate = !isNaN(d.date.getTime());
-            
-            // Pengecualian jenis gangguan spesifik dari kalkulasi
-            const isExcludedType = String(d.type).trim().toLowerCase() === 'laporan kejadian (incident/accident)';
-            
-            return !isHeader && isValidDate && d.airport !== 'undefined' && d.airport !== '' && !isExcludedType;
-        });
-
-        if (processedData.length === 0) throw new Error("Gagal mengekstrak data baris. Pastikan format kolom sesuai atau cek jika semua data masuk dalam kategori yang dikecualikan.");
-
-        // Set default filter periode sesuai dengan data min-max yang ada di Excel
-        const dates = processedData.map(d => d.date.getTime());
-        const minDate = new Date(Math.min(...dates));
-        const maxDate = new Date(Math.max(...dates));
-        
-        const formatYMD = (d) => {
-            const y = d.getFullYear();
-            const m = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${y}-${m}-${day}`;
-        };
-
-        setStartDate(formatYMD(minDate));
-        setEndDate(formatYMD(maxDate));
-
-        setData(processedData);
-        setFileName(file.name);
-        setLoading(false);
-      } catch (err) {
-        setError(err.message || "Gagal membaca format file.");
-        setLoading(false);
       }
-    };
-    reader.readAsArrayBuffer(file);
-    e.target.value = null;
-  };
+    }
+  </script>
+  
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Chart.js DataLabels Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+  <!-- SheetJS (xlsx) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Inter Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-  const {
-    airports, totalByAirport, typesByAirport, trendData, overallTypes, overallAirports, totalRecords, mostFrequentType, highestAirport
-  } = useMemo(() => {
-    if (!data.length) return { airports: [], totalByAirport: [], typesByAirport: [], trendData: [], overallTypes: [], overallAirports: [], totalRecords: 0, mostFrequentType: '-', highestAirport: '-' };
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    .glass-card {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .scrollbar-thin::-webkit-scrollbar { height: 8px; }
+  </style>
+</head>
 
-    // FILTER BERDASARKAN PERIODE WAKTU YANG DIPILIH
-    const periodData = data.filter(d => {
-        if (!startDate || !endDate) return true;
-        return d.dateStr >= startDate && d.dateStr <= endDate;
-    });
-
-    const airportSet = new Set(periodData.map(d => d.airport));
-    const uniqueAirports = Array.from(airportSet).sort();
-    const filteredData = selectedAirport === 'All' ? periodData : periodData.filter(d => d.airport === selectedAirport);
-
-    // Global Counts
-    const airportCounts = {};
-    const globalTypeCounts = {};
-    periodData.forEach(d => {
-      airportCounts[d.airport] = (airportCounts[d.airport] || 0) + 1;
-      globalTypeCounts[d.type] = (globalTypeCounts[d.type] || 0) + 1;
-    });
-
-    const overallAirportsData = Object.entries(airportCounts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-    const overallTypesData = Object.entries(globalTypeCounts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-
-    // Filtered Counts
-    const typeCounts = {};
-    filteredData.forEach(d => {
-      typeCounts[d.type] = (typeCounts[d.type] || 0) + 1;
-    });
-    const typesByAirportData = Object.entries(typeCounts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-
-    // Trends
-    const trendMap = {};
-    filteredData.forEach(d => {
-      const key = timeView === 'daily' ? d.dateStr : d.monthStr;
-      if (!trendMap[key]) trendMap[key] = { name: key, total: 0 };
-      trendMap[key].total += 1;
-    });
-    const trendDataArr = Object.values(trendMap).sort((a, b) => a.name.localeCompare(b.name));
-
-    return {
-      airports: uniqueAirports,
-      totalByAirport: overallAirportsData,
-      overallAirports: overallAirportsData,
-      typesByAirport: typesByAirportData,
-      trendData: trendDataArr,
-      overallTypes: overallTypesData,
-      totalRecords: periodData.length,
-      mostFrequentType: overallTypesData[0]?.name || '-',
-      highestAirport: overallAirportsData[0] ? `${overallAirportsData[0].name} (${overallAirportsData[0].value})` : '-'
-    };
-  }, [data, selectedAirport, timeView, startDate, endDate]);
-
-  const pivotData = useMemo(() => {
-    if (!data.length) return { rows: [], airports: [], totals: {} };
-
-    // FILTER BERDASARKAN PERIODE WAKTU
-    const periodData = data.filter(d => {
-        if (!startDate || !endDate) return true;
-        return d.dateStr >= startDate && d.dateStr <= endDate;
-    });
-
-    // 1. Hitung frekuensi per bandara untuk mengurutkan kolom (terbanyak di kiri)
-    const airportCounts = {};
-    periodData.forEach(d => {
-        airportCounts[d.airport] = (airportCounts[d.airport] || 0) + 1;
-    });
-    const sortedAirports = Object.keys(airportCounts).sort((a, b) => airportCounts[b] - airportCounts[a]);
-
-    // 2. Buat matriks data harian (Tanggal vs Bandara)
-    const dateMap = {};
-    periodData.forEach(d => {
-        if (!dateMap[d.dateStr]) {
-            dateMap[d.dateStr] = {
-                dateStr: d.dateStr,
-                dateObj: d.date,
-                day: d.date.getDate(),
-                month: d.date.getMonth(),
-                total: 0
-            };
-            sortedAirports.forEach(apt => dateMap[d.dateStr][apt] = 0);
-        }
-        dateMap[d.dateStr][d.airport]++;
-        dateMap[d.dateStr].total++;
-    });
-
-    // Urutkan berdasarkan tanggal kronologis
-    let rows = Object.values(dateMap).sort((a, b) => a.dateObj - b.dateObj);
-
-    // 3. Sistem pewarnaan selang-seling berdasarkan Bulan (seperti di referensi gambar)
-    let currentMonth = -1;
-    let colorIndex = -1;
-    const colors = ['bg-orange-900/50 text-orange-200', 'bg-purple-900/50 text-purple-200', 'bg-emerald-900/50 text-emerald-200'];
-
-    rows = rows.map(row => {
-        if (currentMonth === -1) {
-            currentMonth = row.month;
-            colorIndex = 0;
-        } else if (row.month !== currentMonth) {
-            currentMonth = row.month;
-            colorIndex = (colorIndex + 1) % colors.length;
-        }
-        return { ...row, colorClass: colors[colorIndex] };
-    });
-
-    // 4. Kalkulasi Total Akumulasi (baris paling bawah)
-    const totals = { total: 0 };
-    sortedAirports.forEach(apt => totals[apt] = 0);
-    rows.forEach(row => {
-        sortedAirports.forEach(apt => totals[apt] += row[apt]);
-        totals.total += row.total;
-    });
-
-    return { rows, airports: sortedAirports, totals };
-  }, [data, startDate, endDate]);
-
-  return (
-    <div className="min-h-screen bg-[#0b1121] text-slate-300 font-sans p-4 md:p-6 overflow-x-hidden selection:bg-cyan-900 selection:text-cyan-100">
-      
-      {/* Background glow effects */}
-      <div className="fixed top-0 left-0 w-[500px] h-[500px] bg-cyan-900/20 rounded-full blur-[120px] pointer-events-none"></div>
-      <div className="fixed bottom-0 right-0 w-[600px] h-[600px] bg-blue-900/10 rounded-full blur-[150px] pointer-events-none"></div>
-
-      <div className="max-w-[1400px] mx-auto space-y-6 relative z-10">
+<body class="h-full flex flex-col antialiased selection:bg-blue-500 selection:text-white bg-slate-900">
+  <div id="app" class="min-h-screen flex flex-col">
+    
+    <!-- Top Navigation / Header -->
+    <header class="sticky top-0 z-40 glass-card border-b border-slate-800 bg-slate-900/90 backdrop-blur-md">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         
-        {/* Header Section */}
-        <div className="bg-[#111827]/80 backdrop-blur-md rounded-2xl border border-slate-800/80 p-5 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.3)] shrink-0">
-               <Activity className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tight">
-                MONITORING DAMPAK GANGGUAN
-              </h1>
-              <div className="flex items-center gap-2 mt-1.5">
-                  <span className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md bg-slate-800 text-slate-400 border border-slate-700">
-                      <Calendar className="w-3.5 h-3.5" /> Data Operasional
-                  </span>
-                  {fileName && (
-                    <span className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md bg-emerald-900/30 text-emerald-400 border border-emerald-800/50">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> {fileName}
-                    </span>
-                  )}
-              </div>
-            </div>
+        <!-- Logo & Title -->
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/30">
+            <i class="fa-solid fa-plane-arrival text-white text-lg"></i>
           </div>
-          
-          <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
-            <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} ref={fileInputRef} className="hidden" />
-            <button 
-                onClick={() => fileInputRef.current?.click()}
-                disabled={!isSheetJSLoaded || loading}
-                className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold transition-all w-full md:w-auto
-                    ${(!isSheetJSLoaded || loading)
-                        ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' 
-                        : 'bg-blue-600/90 hover:bg-blue-500 text-white border border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]'}`}
-            >
-                {loading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : <UploadCloud className="w-5 h-5" />}
-                <span>Upload Excel Data</span>
-            </button>
-            
-            {data.length > 0 && (
-                <div className="flex items-center gap-2 bg-[#1e293b] px-4 py-3 rounded-xl border border-slate-700 w-full md:w-auto shadow-inner">
-                    <MapPin className="w-5 h-5 text-cyan-400 flex-shrink-0" />
-                    <select 
-                        value={selectedAirport} 
-                        onChange={(e) => setSelectedAirport(e.target.value)}
-                        className="bg-transparent border-none focus:ring-0 text-slate-200 font-medium outline-none cursor-pointer w-full"
-                    >
-                        <option value="All">Semua Bandara (Nasional)</option>
-                        {airports.map(apt => (
-                            <option key={apt} value={apt} className="bg-slate-800">{apt}</option>
-                        ))}
-                    </select>
-                </div>
-            )}
+          <div>
+            <h1 class="text-lg font-bold text-white tracking-wide leading-tight">MONITORING GANGGUAN BANDARA</h1>
+            <p class="text-xs text-slate-400">Sistem Tracking & Analisis Irregularitas Penerbangan</p>
           </div>
         </div>
 
-        {/* CONTROLS BAR: FILTER PERIODE TANGGAL */}
-        {!loading && data.length > 0 && !error && (
-            <div className="bg-[#111827]/80 backdrop-blur-md rounded-xl border border-slate-800 p-4 shadow-lg flex flex-col md:flex-row items-center gap-4 animate-in fade-in slide-in-from-top-2 relative z-10">
-                <div className="flex items-center gap-3 text-slate-300">
-                    <Calendar className="w-5 h-5 text-cyan-400" />
-                    <span className="font-semibold text-sm uppercase tracking-wider">Filter Periode:</span>
-                </div>
-                <div className="flex flex-col sm:flex-row items-center gap-2 flex-1 w-full md:w-auto bg-[#1e293b] rounded-lg p-1.5 border border-slate-700/50">
-                    <input 
-                        type="date" 
-                        value={startDate} 
-                        onChange={e => setStartDate(e.target.value)}
-                        className="bg-slate-800 text-slate-200 border-none rounded-md px-3 py-2 focus:ring-1 focus:ring-cyan-500 outline-none w-full md:w-auto [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert cursor-pointer text-sm font-medium shadow-inner"
-                    />
-                    <span className="text-slate-500 font-bold px-2 hidden sm:block">s/d</span>
-                    <input 
-                        type="date" 
-                        value={endDate} 
-                        onChange={e => setEndDate(e.target.value)}
-                        className="bg-slate-800 text-slate-200 border-none rounded-md px-3 py-2 focus:ring-1 focus:ring-cyan-500 outline-none w-full md:w-auto [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert cursor-pointer text-sm font-medium shadow-inner"
-                    />
-                </div>
-            </div>
-        )}
+        <!-- Action Buttons -->
+        <div class="flex items-center space-x-3">
+          <!-- Excel Upload Button -->
+          <label for="excel-upload" class="cursor-pointer inline-flex items-center space-x-2 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs sm:text-sm transition-all duration-200 shadow-lg shadow-emerald-900/30 active:scale-95">
+            <i class="fa-solid fa-file-excel"></i>
+            <span class="hidden sm:inline">Upload Excel/CSV</span>
+            <span class="sm:hidden">Upload</span>
+            <input type="file" id="excel-upload" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileUpload(event)" />
+          </label>
 
-        {error && (
-            <div className="bg-red-900/20 border border-red-500/50 text-red-400 p-4 rounded-xl flex items-start gap-3 animate-in fade-in">
-                <AlertCircle className="w-6 h-6 flex-shrink-0 mt-0.5" />
-                <div>
-                    <h3 className="font-semibold text-red-300">Error System</h3>
-                    <p className="text-sm mt-1">{error}</p>
-                </div>
-            </div>
-        )}
+          <!-- Export Filtered Data -->
+          <button onclick="exportToCSV()" class="inline-flex items-center space-x-2 px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs sm:text-sm border border-slate-700 transition-all duration-200 active:scale-95">
+            <i class="fa-solid fa-download text-blue-400"></i>
+            <span class="hidden sm:inline">Ekspor Data</span>
+          </button>
 
-        {/* Empty State */}
-        {!loading && data.length === 0 && !error && (
-            <div className="bg-[#111827]/50 rounded-2xl border border-dashed border-slate-700 h-[60vh] flex flex-col justify-center items-center text-slate-500 gap-6 p-8 text-center backdrop-blur-sm">
-                <div className="w-24 h-24 bg-slate-800/80 rounded-full flex items-center justify-center mb-2 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
-                    <FileSpreadsheet className="w-12 h-12 text-slate-600" />
-                </div>
-                <div>
-                    <h3 className="text-2xl font-bold text-slate-300 mb-2">Sistem Siaga</h3>
-                    <p className="max-w-md text-slate-500 mx-auto">
-                        Pusat monitoring belum menerima data masukan. Silakan unggah file <b>"irregularities_export agustus-sept 2026 Test.xlsx"</b> untuk mengaktifkan radar analitik.
-                    </p>
-                </div>
-                <button 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="mt-4 bg-cyan-600/20 text-cyan-400 hover:bg-cyan-500/30 border border-cyan-500/30 px-6 py-3 rounded-xl font-semibold transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(6,182,212,0.15)]"
-                >
-                    <UploadCloud className="w-5 h-5" />
-                    Inisialisasi Data
-                </button>
-            </div>
-        )}
-
-        {}
-        {!loading && data.length > 0 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                
-                {/* KPI Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {[
-                        { title: 'Total Keseluruhan Data', val: totalRecords, icon: <Activity className="w-6 h-6 text-cyan-400" />, color: 'from-cyan-500/20 to-transparent', border: 'border-cyan-500/30' },
-                        { title: 'Total Bandara Terdampak', val: airports.length, icon: <MapPin className="w-6 h-6 text-emerald-400" />, color: 'from-emerald-500/20 to-transparent', border: 'border-emerald-500/30' },
-                        { title: 'Frekuensi Tertinggi', val: highestAirport, icon: <BarChart3 className="w-6 h-6 text-orange-400" />, color: 'from-orange-500/20 to-transparent', border: 'border-orange-500/30' },
-                        { title: 'Dominasi Gangguan', val: mostFrequentType, icon: <ShieldAlert className="w-6 h-6 text-pink-400" />, color: 'from-pink-500/20 to-transparent', border: 'border-pink-500/30' }
-                    ].map((card, i) => (
-                        <div key={i} className={`bg-[#111827]/80 backdrop-blur-md rounded-2xl p-5 border ${card.border} shadow-lg relative overflow-hidden group`}>
-                            <div className={`absolute inset-0 bg-gradient-to-br ${card.color} opacity-50 group-hover:opacity-100 transition-opacity duration-500`}></div>
-                            <div className="relative z-10 flex items-center gap-4">
-                                <div className="p-3 bg-slate-800/80 rounded-xl shadow-inner border border-slate-700/50">
-                                    {card.icon}
-                                </div>
-                                <div>
-                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{card.title}</p>
-                                    <p className="text-2xl font-bold text-white mt-1 drop-shadow-sm">{card.val}</p>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* 3. Trend Time Series - Full Width */}
-                <div className="bg-[#111827]/80 backdrop-blur-md rounded-2xl p-6 border border-slate-800 shadow-xl flex flex-col h-[400px]">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-blue-500/20 rounded-lg border border-blue-500/30">
-                                <TrendingUp className="w-5 h-5 text-blue-400" />
-                            </div>
-                            <h2 className="text-lg font-bold text-slate-100 tracking-wide">3. TREND GANGGUAN HARIAN & BULANAN {selectedAirport !== 'All' ? `(${selectedAirport})` : ''}</h2>
-                        </div>
-                        <div className="flex bg-[#1e293b] rounded-lg p-1 border border-slate-700 shadow-inner">
-                            <button
-                                onClick={() => setTimeView('daily')}
-                                className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${timeView === 'daily' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
-                            >Harian</button>
-                            <button
-                                onClick={() => setTimeView('monthly')}
-                                className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${timeView === 'monthly' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
-                            >Bulanan</button>
-                        </div>
-                    </div>
-                    <div className="flex-1 w-full min-h-0">
-                        {trendData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                    <defs>
-                                        <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.4}/>
-                                            <stop offset="95%" stopColor="#38bdf8" stopOpacity={0}/>
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.5} />
-                                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
-                                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
-                                    <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#475569', strokeWidth: 1, strokeDasharray: '4 4' }} />
-                                    <Area type="monotone" dataKey="total" name="Total Insiden" stroke="#38bdf8" strokeWidth={3} fillOpacity={1} fill="url(#colorTrend)" activeDot={{ r: 6, fill: '#38bdf8', stroke: '#fff', strokeWidth: 2, shadow: '0 0 10px #38bdf8' }}>
-                                        <LabelList dataKey="total" position="top" fill="#94a3b8" fontSize={11} fontWeight="bold" offset={8} />
-                                    </Area>
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        ) : (<div className="h-full flex items-center justify-center text-slate-500">Tidak ada data</div>)}
-                    </div>
-                </div>
-
-                {/* Grid 2 Columns */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    
-                    {/* 1. Bar Chart: Total Gangguan per Bandara */}
-                    <div className="bg-[#111827]/80 backdrop-blur-md rounded-2xl p-6 border border-slate-800 shadow-xl flex flex-col h-[400px]">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="p-2 bg-emerald-500/20 rounded-lg border border-emerald-500/30">
-                                <BarChart3 className="w-5 h-5 text-emerald-400" />
-                            </div>
-                            <h2 className="text-lg font-bold text-slate-100 tracking-wide">1. JUMLAH TOTAL GANGGUAN PER BANDARA</h2>
-                        </div>
-                        <div className="flex-1 w-full min-h-0">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={totalByAirport} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.5} />
-                                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} angle={-45} textAnchor="end" />
-                                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
-                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b', opacity: 0.8 }} />
-                                    <Bar dataKey="value" name="Total Data" radius={[4, 4, 0, 0]}>
-                                        {totalByAirport.map((entry, index) => (
-                                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                        ))}
-                                        <LabelList dataKey="value" position="top" fill="#e2e8f0" fontSize={12} fontWeight="bold" offset={8} />
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-
-                    {/* 2. Jenis Gangguan per bandara */}
-                    <div className="bg-[#111827]/80 backdrop-blur-md rounded-2xl p-6 border border-slate-800 shadow-xl flex flex-col h-[400px]">
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="p-2 bg-pink-500/20 rounded-lg border border-pink-500/30">
-                                <PieChartIcon className="w-5 h-5 text-pink-400" />
-                            </div>
-                            <h2 className="text-lg font-bold text-slate-100 tracking-wide">
-                                2. JUMLAH JENIS GANGGUAN {selectedAirport !== 'All' ? <span className="text-pink-400">({selectedAirport})</span> : ''}
-                            </h2>
-                        </div>
-                        <div className="flex-1 w-full min-h-0 relative">
-                            {typesByAirport.length > 0 ? (
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie
-                                            data={typesByAirport} cx="50%" cy="50%" innerRadius={70} outerRadius={110} paddingAngle={4} dataKey="value" stroke="none"
-                                            labelLine={false} label={renderCustomizedPieLabel}
-                                        >
-                                            {typesByAirport.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={COLORS[(index + 3) % COLORS.length]} />
-                                            ))}
-                                        </Pie>
-                                        <Tooltip content={<CustomTooltip />} />
-                                        <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '13px', color: '#cbd5e1' }} iconType="circle" />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                            ) : (
-                                <div className="h-full flex items-center justify-center text-slate-500">N/A</div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Bottom Row: Global Percentages */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* 6. Persentase jumlah gangguan secara keseluruhan (Bandara) */}
-                    <div className="bg-[#111827]/80 backdrop-blur-md rounded-2xl p-6 border border-slate-800 shadow-xl flex flex-col h-[450px]">
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-500/30">
-                                <PieChartIcon className="w-5 h-5 text-amber-400" />
-                            </div>
-                            <h2 className="text-lg font-bold text-slate-100 tracking-wide">6. % JUMLAH GANGGUAN KESELURUHAN (BANDARA)</h2>
-                        </div>
-                        <div className="flex-1 w-full min-h-0 mt-4">
-                             <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        activeIndex={activeIndexAirports} activeShape={renderActiveShape} data={overallAirports} cx="50%" cy="50%" innerRadius={80} outerRadius={110} dataKey="value" stroke="none" paddingAngle={2} onMouseEnter={(_, index) => setActiveIndexAirports(index)}
-                                        labelLine={false} label={renderCustomizedPieLabel}
-                                    >
-                                        {overallAirports.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                        ))}
-                                    </Pie>
-                                </PieChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-
-                    {/* 7. Persentase jenis gangguan secara keseluruhan (Nasional) */}
-                     <div className="bg-[#111827]/80 backdrop-blur-md rounded-2xl p-6 border border-slate-800 shadow-xl flex flex-col h-[450px]">
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="p-2 bg-purple-500/20 rounded-lg border border-purple-500/30">
-                                <PieChartIcon className="w-5 h-5 text-purple-400" />
-                            </div>
-                            <h2 className="text-lg font-bold text-slate-100 tracking-wide">7. % JENIS GANGGUAN KESELURUHAN</h2>
-                        </div>
-                        <div className="flex-1 w-full min-h-0 mt-4">
-                             <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        activeIndex={activeIndexTypes} activeShape={renderActiveShape} data={overallTypes} cx="50%" cy="50%" innerRadius={80} outerRadius={110} dataKey="value" stroke="none" paddingAngle={2} onMouseEnter={(_, index) => setActiveIndexTypes(index)}
-                                        labelLine={false} label={renderCustomizedPieLabel}
-                                    >
-                                        {overallTypes.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[(index + 5) % COLORS.length]} />
-                                        ))}
-                                    </Pie>
-                                </PieChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-                </div>
-
-                {}
-                {/* 8. Tabel Interaktif Rekapitulasi */}
-                <div className="bg-[#111827]/80 backdrop-blur-md rounded-2xl p-6 border border-slate-800 shadow-xl flex flex-col mt-6">
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="p-2 bg-indigo-500/20 rounded-lg border border-indigo-500/30">
-                            <FileSpreadsheet className="w-5 h-5 text-indigo-400" />
-                        </div>
-                        <h2 className="text-lg font-bold text-slate-100 tracking-wide">8. TABEL REKAPITULASI GANGGUAN HARIAN</h2>
-                    </div>
-                    
-                    <div className="w-full overflow-x-auto rounded-xl border border-slate-700 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
-                        <table className="w-full text-center border-collapse min-w-max text-sm">
-                            <thead>
-                                <tr>
-                                    <th className="sticky left-0 z-20 bg-[#1e293b] text-slate-200 font-bold p-3 border border-slate-600 w-24 shadow-[2px_0_5px_rgba(0,0,0,0.2)]">Tanggal</th>
-                                    {pivotData.airports.map(apt => (
-                                        <th key={apt} className="bg-[#1e293b] text-slate-200 font-bold p-3 border border-slate-600 w-20">{apt}</th>
-                                    ))}
-                                    <th className="bg-slate-700 text-white font-bold p-3 border border-slate-600 w-24">TOTAL</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {pivotData.rows.map((row, i) => (
-                                    <tr key={i} className="hover:bg-slate-800/80 transition-colors bg-[#0f172a]/50">
-                                        <td className={`sticky left-0 z-10 font-bold p-2 border border-slate-700 shadow-[2px_0_5px_rgba(0,0,0,0.2)] ${row.colorClass}`}>
-                                            {row.day}
-                                        </td>
-                                        {pivotData.airports.map(apt => (
-                                            <td key={apt} className="p-2 border border-slate-700 text-slate-300">
-                                                {row[apt] > 0 ? <span className="font-semibold text-slate-200">{row[apt]}</span> : <span className="text-slate-600">0</span>}
-                                            </td>
-                                        ))}
-                                        <td className="font-bold p-2 border border-slate-700 text-cyan-400 bg-slate-800/40">
-                                            {row.total}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                            <tfoot>
-                                <tr>
-                                    <th className="sticky left-0 z-20 bg-slate-800 text-white font-bold p-3 border border-slate-600 shadow-[2px_0_5px_rgba(0,0,0,0.2)]">TOTAL</th>
-                                    {pivotData.airports.map(apt => (
-                                        <th key={apt} className="bg-slate-800 text-white font-bold p-3 border border-slate-600">
-                                            {pivotData.totals[apt]}
-                                        </th>
-                                    ))}
-                                    <th className="bg-cyan-900 text-cyan-100 font-black p-3 border border-cyan-800 text-base shadow-inner">
-                                        {pivotData.totals.total}
-                                    </th>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                </div>
-
-            </div>
-        )}
+          <!-- Reset Filter -->
+          <button onclick="resetFilters()" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-red-900/50 hover:text-red-300 text-slate-400 border border-slate-700 transition-all duration-200" title="Reset Semua Filter">
+            <i class="fa-solid fa-rotate-right"></i>
+          </button>
+        </div>
       </div>
-    </div>
-  );
-}
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <!-- KPI 1: Total Gangguan -->
+        <div class="glass-card rounded-2xl p-4 relative overflow-hidden group hover:border-blue-500/50 transition-all">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Gangguan</span>
+            <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+          </div>
+          <div class="mt-2 flex items-baseline justify-between">
+            <span id="kpi-total-gangguan" class="text-3xl font-extrabold text-white">0</span>
+            <span class="text-xs text-blue-400 font-medium bg-blue-500/10 px-2 py-0.5 rounded-full" id="kpi-periode-label">100% Data</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-1" id="kpi-sub-total">Total insiden terdeteksi</p>
+          <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
+        </div>
+
+        <!-- KPI 2: Bandara Terdampak -->
+        <div class="glass-card rounded-2xl p-4 relative overflow-hidden group hover:border-amber-500/50 transition-all">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Bandara Terdampak</span>
+            <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
+              <i class="fa-solid fa-tower-observation"></i>
+            </div>
+          </div>
+          <div class="mt-2 flex items-baseline justify-between">
+            <span id="kpi-total-bandara" class="text-3xl font-extrabold text-white">0</span>
+            <span id="kpi-top-bandara-pct" class="text-xs text-amber-400 font-medium bg-amber-500/10 px-2 py-0.5 rounded-full">-</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-1 truncate" id="kpi-top-bandara-desc">Bandara terbanyak: -</p>
+          <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
+        </div>
+
+        <!-- KPI 3: Jenis Gangguan Terbanyak -->
+        <div class="glass-card rounded-2xl p-4 relative overflow-hidden group hover:border-red-500/50 transition-all">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Jenis Terbanyak</span>
+            <div class="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center">
+              <i class="fa-solid fa-bolt"></i>
+            </div>
+          </div>
+          <div class="mt-2 flex items-baseline justify-between">
+            <span id="kpi-top-kategori-count" class="text-3xl font-extrabold text-white">0</span>
+            <span id="kpi-top-kategori-pct" class="text-xs text-red-400 font-medium bg-red-500/10 px-2 py-0.5 rounded-full">-</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-1 truncate" id="kpi-top-kategori-desc">Kategori: -</p>
+          <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-rose-500"></div>
+        </div>
+
+        <!-- KPI 4: Rata-Rata Gangguan Harian -->
+        <div class="glass-card rounded-2xl p-4 relative overflow-hidden group hover:border-emerald-500/50 transition-all">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Rata-Rata Harian</span>
+            <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+              <i class="fa-solid fa-chart-line"></i>
+            </div>
+          </div>
+          <div class="mt-2 flex items-baseline justify-between">
+            <span id="kpi-avg-daily" class="text-3xl font-extrabold text-white">0.0</span>
+            <span class="text-xs text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-full">Kejadian/Hari</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-1" id="kpi-range-info">Rentang Waktu: -</p>
+          <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
+        </div>
+
+      </div>
+
+      <!-- TREND GANGGUAN HARIAN & BULANAN CHART SECTION -->
+      <div class="glass-card rounded-2xl p-5 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center">
+              <i class="fa-solid fa-chart-line text-base"></i>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-white tracking-wide uppercase">TREND GANGGUAN HARIAN & BULANAN</h3>
+              <p class="text-xs text-slate-400">Grafik pergerakan dan eskalasi frekuensi gangguan berdasarkan waktu</p>
+            </div>
+          </div>
+
+          <!-- Mode Switcher: Harian / Bulanan -->
+          <div class="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800 self-start sm:self-auto">
+            <button id="btn-trend-daily" onclick="setTrendMode('daily')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-blue-600 text-white shadow-md shadow-blue-500/30">
+              Harian
+            </button>
+            <button id="btn-trend-monthly" onclick="setTrendMode('monthly')" class="px-4 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-all">
+              Bulanan
+            </button>
+          </div>
+        </div>
+
+        <div class="relative w-full h-[320px] pt-2">
+          <canvas id="chart-trend-line"></canvas>
+        </div>
+      </div>
+
+      <!-- FILTER CONTROLS & CATEGORY CHIPS -->
+      <div class="glass-card rounded-2xl p-5 space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-3">
+          <div>
+            <h3 class="text-base font-bold text-white tracking-wide uppercase">FILTER & PENCARIAN DATA</h3>
+            <p class="text-xs text-slate-400">Saring data berdasarkan bandara, jenis gangguan, rentang tanggal, atau kata kunci</p>
+          </div>
+          <div id="active-filter-badge" class="px-2.5 py-1 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs font-medium">
+            Semua Data
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- Filter Bandara -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1.5">Bandar Udara</label>
+            <select id="filter-airport" onchange="applyFilters()" class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-xl p-2.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+              <option value="ALL">Semua Bandar Udara</option>
+            </select>
+          </div>
+
+          <!-- Filter Jenis Gangguan -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1.5">Jenis Gangguan</label>
+            <select id="filter-category" onchange="applyFilters()" class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-xl p-2.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+              <option value="ALL">Semua Jenis Gangguan</option>
+            </select>
+          </div>
+
+          <!-- Filter Date Start -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1.5">Tanggal Mulai</label>
+            <input type="date" id="filter-start-date" onchange="applyFilters()" class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-xl p-2.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" />
+          </div>
+
+          <!-- Filter Date End -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1.5">Tanggal Akhir</label>
+            <input type="date" id="filter-end-date" onchange="applyFilters()" class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-xl p-2.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" />
+          </div>
+        </div>
+
+        <!-- Category Quick Chips -->
+        <div class="pt-2">
+          <span class="text-xs font-semibold text-slate-400 block mb-2">Kategori Cepat:</span>
+          <div id="category-chips-container" class="flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+
+      <!-- INFOGRAPHICS & CATEGORY BREAKDOWN -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Chart Doughnut Kategori -->
+        <div class="glass-card rounded-2xl p-5 flex flex-col justify-between space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 class="text-sm font-bold text-white tracking-wide uppercase">PROPORSIONAL KATEGORI GANGGUAN</h3>
+            <i class="fa-solid fa-chart-pie text-slate-400"></i>
+          </div>
+          <div class="relative w-full h-[260px] flex items-center justify-center">
+            <canvas id="chart-category-totals"></canvas>
+          </div>
+        </div>
+
+        <!-- Breakdown Top Bandara per Kategori -->
+        <div class="lg:col-span-2 glass-card rounded-2xl p-5 space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div>
+              <h3 class="text-sm font-bold text-white tracking-wide uppercase">ANALISIS BANDARA TERDAMPAK PER KATEGORI</h3>
+              <p class="text-xs text-slate-400">Distribusi insiden bandara teratas untuk tiap jenis gangguan</p>
+            </div>
+            <i class="fa-solid fa-layer-group text-slate-400"></i>
+          </div>
+          <div id="category-top-airports-cards" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+
+      <!-- REKAPITULASI HARIAN PER BANDARA TABLE -->
+      <div class="glass-card rounded-2xl p-5 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div>
+            <h3 class="text-base font-bold text-white tracking-wide uppercase">MATRIKS REKAPITULASI HARIAN PER BANDARA</h3>
+            <p class="text-xs text-slate-400">Ringkasan matriks frekuensi insiden per bandara dan per tanggal</p>
+          </div>
+          <button onclick="exportRecapToExcel()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition-all flex items-center space-x-2 self-start sm:self-auto">
+            <i class="fa-solid fa-file-excel text-emerald-400"></i>
+            <span>Unduh Rekapitulasi Excel</span>
+          </button>
+        </div>
+
+        <div id="recap-month-legend" class="flex flex-wrap items-center gap-2 text-xs"></div>
+
+        <div class="overflow-x-auto rounded-xl border border-slate-800 scrollbar-thin">
+          <table class="w-full text-xs text-left">
+            <thead id="recap-table-head" class="bg-slate-800 text-slate-300 uppercase font-semibold"></thead>
+            <tbody id="recap-table-body" class="divide-y divide-slate-800/60"></tbody>
+            <tfoot id="recap-table-foot" class="bg-slate-900 border-t-2 border-slate-700"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- DATA LOG TABLE SECTION -->
+      <div class="glass-card rounded-2xl p-5 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div>
+            <h3 class="text-base font-bold text-white tracking-wide uppercase">LOG DATA DETAIL GANGGUAN</h3>
+            <p class="text-xs text-slate-400">Daftar lengkap rekaman insiden dan gangguan penerbangan</p>
+          </div>
+
+          <!-- Search Input -->
+          <div class="relative w-full sm:w-64">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+            <input type="text" id="table-search" oninput="applyFilters()" placeholder="Cari bandara, jenis, flight..." class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs rounded-xl pl-8 pr-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" />
+          </div>
+        </div>
+
+        <!-- Table Container -->
+        <div class="overflow-x-auto rounded-xl border border-slate-800">
+          <table class="w-full text-xs text-left">
+            <thead class="bg-slate-800 text-slate-300 uppercase font-semibold border-b border-slate-700">
+              <tr>
+                <th onclick="sortTable('tanggal')" class="px-4 py-3 cursor-pointer hover:text-white transition-colors">
+                  Tanggal <i class="fa-solid fa-sort ml-1 opacity-50"></i>
+                </th>
+                <th onclick="sortTable('bandara')" class="px-4 py-3 cursor-pointer hover:text-white transition-colors">
+                  Bandar Udara <i class="fa-solid fa-sort ml-1 opacity-50"></i>
+                </th>
+                <th onclick="sortTable('jenis')" class="px-4 py-3 cursor-pointer hover:text-white transition-colors">
+                  Jenis Gangguan <i class="fa-solid fa-sort ml-1 opacity-50"></i>
+                </th>
+                <th onclick="sortTable('penerbangan')" class="px-4 py-3 cursor-pointer hover:text-white transition-colors">
+                  Penerbangan <i class="fa-solid fa-sort ml-1 opacity-50"></i>
+                </th>
+                <th class="px-4 py-3">Keterangan / Dampak</th>
+              </tr>
+            </thead>
+            <tbody id="table-body" class="divide-y divide-slate-800"></tbody>
+          </table>
+        </div>
+
+        <!-- Table Footer / Pagination -->
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400 pt-2">
+          <div class="flex items-center space-x-2">
+            <span>Tampilkan</span>
+            <select id="table-page-size" onchange="changePageSize()" class="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-2 py-1 outline-none">
+              <option value="10">10</option>
+              <option value="25" selected>25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+            <span id="table-info">Menampilkan 0 data</span>
+          </div>
+
+          <div id="table-pagination" class="flex items-center space-x-1"></div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+  </div>
+
+  <script>
+    // Register Chart.js DataLabels plugin
+    if (window.ChartDataLabels) {
+      Chart.register(ChartDataLabels);
+    }
+
+    // Dynamic Color Palette
+    const colorPalette = [
+      '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+      '#ec4899', '#06b6d4', '#84cc16', '#6366f1', '#14b8a6',
+      '#f97316', '#a855f7', '#0284c7', '#15803d', '#b45309'
+    ];
+
+    // Rich Month-Specific Color Themes for Table Row Highlighting
+    const monthColorMap = {
+      0: { name: 'Januari', rowBg: 'bg-sky-950/70 hover:bg-sky-900/80', dateBg: 'bg-sky-900/90 text-sky-200 border-sky-600/60', text: 'text-sky-300', badge: 'bg-sky-500/20 text-sky-300 border-sky-500/40' },
+      1: { name: 'Februari', rowBg: 'bg-pink-950/70 hover:bg-pink-900/80', dateBg: 'bg-pink-900/90 text-pink-200 border-pink-600/60', text: 'text-pink-300', badge: 'bg-pink-500/20 text-pink-300 border-pink-500/40' },
+      2: { name: 'Maret', rowBg: 'bg-emerald-950/70 hover:bg-emerald-900/80', dateBg: 'bg-emerald-900/90 text-emerald-200 border-emerald-600/60', text: 'text-emerald-300', badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
+      3: { name: 'April', rowBg: 'bg-teal-950/70 hover:bg-teal-900/80', dateBg: 'bg-teal-900/90 text-teal-200 border-teal-600/60', text: 'text-teal-300', badge: 'bg-teal-500/20 text-teal-300 border-teal-500/40' },
+      4: { name: 'Mei', rowBg: 'bg-lime-950/70 hover:bg-lime-900/80', dateBg: 'bg-lime-900/90 text-lime-200 border-lime-600/60', text: 'text-lime-300', badge: 'bg-lime-500/20 text-lime-300 border-lime-500/40' },
+      5: { name: 'Juni', rowBg: 'bg-amber-950/70 hover:bg-amber-900/80', dateBg: 'bg-amber-900/90 text-amber-200 border-amber-600/60', text: 'text-amber-300', badge: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
+      6: { name: 'Juli', rowBg: 'bg-cyan-950/70 hover:bg-cyan-900/80', dateBg: 'bg-cyan-900/90 text-cyan-200 border-cyan-600/60', text: 'text-cyan-300', badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' },
+      7: { name: 'Agustus', rowBg: 'bg-rose-950/70 hover:bg-rose-900/80', dateBg: 'bg-rose-900/90 text-rose-200 border-rose-600/60', text: 'text-rose-300', badge: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
+      8: { name: 'September', rowBg: 'bg-indigo-950/70 hover:bg-indigo-900/80', dateBg: 'bg-indigo-900/90 text-indigo-200 border-indigo-600/60', text: 'text-indigo-300', badge: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' },
+      9: { name: 'Oktober', rowBg: 'bg-purple-950/70 hover:bg-purple-900/80', dateBg: 'bg-purple-900/90 text-purple-200 border-purple-600/60', text: 'text-purple-300', badge: 'bg-purple-500/20 text-purple-300 border-purple-500/40' },
+      10: { name: 'November', rowBg: 'bg-orange-950/70 hover:bg-orange-900/80', dateBg: 'bg-orange-900/90 text-orange-200 border-orange-600/60', text: 'text-orange-300', badge: 'bg-orange-500/20 text-orange-300 border-orange-500/40' },
+      11: { name: 'Desember', rowBg: 'bg-blue-950/70 hover:bg-blue-900/80', dateBg: 'bg-blue-900/90 text-blue-200 border-blue-600/60', text: 'text-blue-300', badge: 'bg-blue-500/20 text-blue-300 border-blue-500/40' }
+    };
+
+    const monthNamesIndo = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+
+    // Global Data State
+    let rawDataSet = [];
+    let filteredData = [];
+    let activeCategoryFilter = 'ALL';
+    let chartAirportTotals = null;
+    let chartCategoryTotals = null;
+    let chartTrendLine = null;
+    let trendViewMode = 'daily'; // 'daily' or 'monthly'
+    let recapExportData = null;
+
+    // Table Pagination & Sort State
+    let currentPage = 1;
+    let pageSize = 25;
+    let sortColumn = 'tanggal';
+    let sortDirection = 'desc';
+
+    // Helper: Toast Notifications
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      let bg = 'bg-slate-800 border-slate-700 text-slate-100';
+      if (type === 'success') bg = 'bg-emerald-900/90 border-emerald-600 text-emerald-100';
+      if (type === 'warning') bg = 'bg-amber-900/90 border-amber-600 text-amber-100';
+      if (type === 'error') bg = 'bg-red-900/90 border-red-600 text-red-100';
+
+      toast.className = `flex items-center space-x-2 px-4 py-3 rounded-xl border ${bg} shadow-xl text-xs backdrop-blur-md transition-all duration-300 transform translate-y-2 opacity-0`;
+      toast.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-circle-check' : 'fa-circle-info'}"></i> <span>${message}</span>`;
+      
+      container.appendChild(toast);
+      setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
+      setTimeout(() => {
+        toast.classList.add('opacity-0');
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // Date Parsing Helper
+    function parseCustomDate(val) {
+      if (!val) return null;
+
+      if (val instanceof Date) {
+        if (isNaN(val.getTime())) return null;
+        return new Date(val.getFullYear(), val.getMonth(), val.getDate());
+      }
+
+      if (typeof val === 'number' && val > 1000) {
+        const parsed = XLSX.SSF.parse_date_code(val);
+        if (parsed && parsed.y && parsed.m) {
+          return new Date(parsed.y, parsed.m - 1, parsed.d);
+        }
+      }
+
+      let strVal = String(val).trim();
+      if (!strVal) return null;
+
+      if (!isNaN(strVal) && Number(strVal) > 1000) {
+        const num = Number(strVal);
+        const parsed = XLSX.SSF.parse_date_code(num);
+        if (parsed && parsed.y && parsed.m) {
+          return new Date(parsed.y, parsed.m - 1, parsed.d);
+        }
+      }
+
+      const monthMap = {
+        'jan': 0, 'januari': 0, 'january': 0,
+        'feb': 1, 'februari': 1, 'february': 1,
+        'mar': 2, 'maret': 2, 'march': 2,
+        'apr': 3, 'april': 3,
+        'mei': 4, 'may': 4,
+        'jun': 5, 'juni': 5, 'june': 5,
+        'jul': 6, 'juli': 6, 'july': 6,
+        'agu': 7, 'ags': 7, 'agustus': 7, 'aug': 7, 'august': 7,
+        'sep': 8, 'september': 8,
+        'okt': 9, 'oct': 9, 'oktober': 9, 'october': 9,
+        'nov': 10, 'november': 10,
+        'des': 11, 'dec': 11, 'desember': 11, 'december': 11
+      };
+
+      const textMonthRegex = /^(\d{1,2})[\s\-\/]+([a-zA-Z]+)[\s\-\/]+(\d{2,4})/;
+      const matchTextMonth = strVal.match(textMonthRegex);
+      if (matchTextMonth) {
+        const day = parseInt(matchTextMonth[1], 10);
+        const monthStr = matchTextMonth[2].toLowerCase().slice(0, 3);
+        let year = parseInt(matchTextMonth[3], 10);
+        if (year < 100) year += 2000;
+
+        if (monthMap[monthStr] !== undefined && !isNaN(day) && !isNaN(year)) {
+          return new Date(year, monthMap[monthStr], day);
+        }
+      }
+
+      const cleanStr = strVal.split(' ')[0];
+      const parts = cleanStr.split(/[\/\-\.]/);
+
+      if (parts.length === 3) {
+        let p0 = parseInt(parts[0], 10);
+        let p1 = parseInt(parts[1], 10);
+        let p2 = parseInt(parts[2], 10);
+
+        if (!isNaN(p0) && !isNaN(p1) && !isNaN(p2)) {
+          if (p0 > 1000) return new Date(p0, p1 - 1, p2);
+          if (p2 < 100) p2 += 2000;
+          if (p1 >= 1 && p1 <= 12) return new Date(p2, p1 - 1, p0);
+          if (p0 >= 1 && p0 <= 12) return new Date(p2, p0 - 1, p1);
+        }
+      }
+
+      const d = new Date(strVal);
+      if (!isNaN(d.getTime())) {
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      }
+
+      return null;
+    }
+
+    function formatDateFormatted(d) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${day}/${month}/${year}`;
+    }
+
+    function formatDateDayMonth(d) {
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = monthNamesIndo[d.getMonth()];
+      return `${day} ${month}`;
+    }
+
+    function getAirportCode(str) {
+      if (!str) return 'LOKASI';
+      const clean = String(str).trim();
+      const match = clean.match(/\(([^)]+)\)/);
+      if (match && match[1]) return match[1].toUpperCase();
+      if (clean.length <= 5) return clean.toUpperCase();
+      return clean;
+    }
+
+    function getFuzzyRowValue(row, keywords) {
+      if (!row || typeof row !== 'object') return null;
+      const keys = Object.keys(row);
+      
+      for (const kw of keywords) {
+        const foundKey = keys.find(k => {
+          const cleanKey = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+          return cleanKey.includes(kw);
+        });
+        if (foundKey && row[foundKey] !== undefined && row[foundKey] !== '') {
+          return row[foundKey];
+        }
+      }
+      return null;
+    }
+
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const jsonResult = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+          if (jsonResult.length === 0) {
+            showToast('File kosong atau format tidak valid!', 'error');
+            return;
+          }
+
+          const parsedData = [];
+          let dateFallbackCount = 0;
+
+          jsonResult.forEach((row, idx) => {
+            let bandara = getFuzzyRowValue(row, ['bandara', 'airport', 'stasiun', 'sta', 'apt', 'lokasi', 'kode']) || 'PNK';
+            let tanggalRaw = getFuzzyRowValue(row, ['tanggal', 'tgl', 'date', 'waktu', 'time', 'periode', 'dt']);
+            let jenis = getFuzzyRowValue(row, ['jenis', 'kategori', 'gangguan', 'category', 'tipe', 'irregularity', 'alasan', 'sebab', 'masalah']) || 'Lain-lain';
+            let penerbangan = getFuzzyRowValue(row, ['penerbangan', 'flight', 'maskapai', 'airline', 'flt', 'pesawat']) || '-';
+            let keterangan = getFuzzyRowValue(row, ['keterangan', 'dampak', 'deskripsi', 'catatan', 'remark', 'detail', 'uraian', 'kronologis']) || '-';
+
+            if (jenis && String(jenis).toLowerCase().includes('laporan kejadian')) {
+              return;
+            }
+
+            let dtObj = parseCustomDate(tanggalRaw);
+            if (!dtObj) {
+              dtObj = new Date();
+              dateFallbackCount++;
+            }
+
+            const dtStr = formatDateFormatted(dtObj);
+
+            parsedData.push({
+              id: idx + 1,
+              bandara: String(bandara).trim(),
+              tanggalObj: dtObj,
+              tanggalStr: dtStr,
+              jenis: String(jenis).trim(),
+              penerbangan: String(penerbangan).trim(),
+              keterangan: String(keterangan).trim()
+            });
+          });
+
+          if (parsedData.length === 0) {
+            showToast('Tidak ada data valid yang dapat dimuat dari file!', 'warning');
+            return;
+          }
+
+          rawDataSet = parsedData;
+
+          const uniqueDates = Array.from(new Set(rawDataSet.map(d => d.tanggalStr)));
+          showToast(`Berhasil memuat ${rawDataSet.length} data dari ${uniqueDates.length} hari tanggal berbeda!`, 'success');
+
+          populateFilterDropdowns();
+          applyFilters();
+        } catch (err) {
+          console.error(err);
+          showToast('Gagal memproses file Excel/CSV! Pastikan format sesuai.', 'error');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function generateInitialMockData() {
+      const categories = [
+        "Kabut Asap / Weather", "Cuaca Buruk / Wind", "Gangguan Teknis Runway",
+        "Keterlambatan Operational", "Gangguan Navigasi / VOR"
+      ];
+      
+      const airportTargetTotals = {
+        "PNK (Supadio)": 490,
+        "PKY (Tjilik Riwut)": 297,
+        "DJB (Sultan Thaha)": 220,
+        "BPN (SAMS Sepinggan)": 133,
+        "DJJ (Sentani)": 101,
+        "BDJ (Syamsudin Noor)": 88,
+        "PLM (Sultan Mahmud Badaruddin II)": 75,
+        "AMQ (Pattimura)": 58,
+        "PKU (Sultan Syarif Kasim II)": 14,
+        "SUB (Juanda)": 13,
+        "PGK (Depati Amir)": 9,
+        "TNJ (Raja Haji Fisabilillah)": 7,
+        "BIK (Frans Kaisiepo)": 6,
+        "UPG (Sultan Hasanuddin)": 6,
+        "YIA (Yogyakarta International)": 4,
+        "HLP (Halim Perdanakusuma)": 4,
+        "DTB (Silangit)": 2,
+        "TJQ (H.A.S. Hanandjoeddin)": 2
+      };
+
+      const airlines = ["GA-502", "JT-610", "QG-831", "ID-6220", "IW-1240"];
+
+      // Multi-Month Data Sample (Juli, Agustus, September 2026)
+      const julDates = [new Date(2026, 6, 28), new Date(2026, 6, 29), new Date(2026, 6, 30), new Date(2026, 6, 31)];
+      const augDates = [
+        new Date(2026, 7, 19), new Date(2026, 7, 20), new Date(2026, 7, 21),
+        new Date(2026, 7, 22), new Date(2026, 7, 23), new Date(2026, 7, 24),
+        new Date(2026, 7, 25), new Date(2026, 7, 26), new Date(2026, 7, 27),
+        new Date(2026, 7, 28), new Date(2026, 7, 29), new Date(2026, 7, 30)
+      ];
+      const sepDates = [new Date(2026, 8, 1), new Date(2026, 8, 2), new Date(2026, 8, 3)];
+
+      const allSampleDates = [...julDates, ...augDates, ...sepDates];
+
+      const dataset = [];
+      let currentId = 1;
+
+      Object.keys(airportTargetTotals).forEach((apt, aptIdx) => {
+        const totalToCreate = airportTargetTotals[apt];
+        for (let i = 0; i < totalToCreate; i++) {
+          const dt = allSampleDates[i % allSampleDates.length];
+          
+          // Weighted category assignment per airport for realistic top-5 variation
+          const cat = categories[(i + aptIdx) % categories.length];
+          const flight = airlines[i % airlines.length];
+          
+          dataset.push({
+            id: currentId++,
+            bandara: apt,
+            tanggalObj: new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()),
+            tanggalStr: formatDateFormatted(dt),
+            jenis: cat,
+            penerbangan: flight,
+            keterangan: `Dampak operasional jarak pandang / irregularitas jadwal pada penerbangan ${flight}`
+          });
+        }
+      });
+
+      rawDataSet = dataset;
+    }
+
+    function populateFilterDropdowns() {
+      const airportSelect = document.getElementById('filter-airport');
+      const categorySelect = document.getElementById('filter-category');
+      const categoryChipsContainer = document.getElementById('category-chips-container');
+
+      const airports = Array.from(new Set(rawDataSet.map(d => d.bandara))).sort();
+      const categories = Array.from(new Set(rawDataSet.map(d => d.jenis))).sort();
+
+      airportSelect.innerHTML = '<option value="ALL">Semua Bandar Udara</option>';
+      airports.forEach(apt => {
+        const opt = document.createElement('option');
+        opt.value = apt;
+        opt.textContent = apt;
+        airportSelect.appendChild(opt);
+      });
+
+      categorySelect.innerHTML = '<option value="ALL">Semua Jenis Gangguan</option>';
+      categories.forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat;
+        opt.textContent = cat;
+        categorySelect.appendChild(opt);
+      });
+
+      categoryChipsContainer.innerHTML = '';
+      
+      const allBtn = document.createElement('button');
+      allBtn.className = `px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${activeCategoryFilter === 'ALL' ? 'bg-blue-600 text-white border-blue-400 shadow-md shadow-blue-500/30' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'}`;
+      allBtn.innerHTML = `<i class="fa-solid fa-border-all mr-1.5"></i> Semua Kategori`;
+      allBtn.onclick = () => { selectCategoryFilter('ALL'); };
+      categoryChipsContainer.appendChild(allBtn);
+
+      categories.forEach((cat, idx) => {
+        const color = colorPalette[idx % colorPalette.length];
+        const btn = document.createElement('button');
+        const isActive = activeCategoryFilter === cat;
+        
+        btn.className = `px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 flex items-center space-x-1.5 ${isActive ? 'bg-slate-100 text-slate-900 border-white shadow-lg' : 'bg-slate-800/90 text-slate-300 border-slate-700 hover:bg-slate-700'}`;
+        btn.innerHTML = `<span class="w-2 h-2 rounded-full" style="background-color: ${color}"></span> <span>${cat}</span>`;
+        btn.onclick = () => { selectCategoryFilter(cat); };
+        categoryChipsContainer.appendChild(btn);
+      });
+    }
+
+    function selectCategoryFilter(cat) {
+      activeCategoryFilter = cat;
+      document.getElementById('filter-category').value = cat;
+      populateFilterDropdowns();
+      applyFilters();
+    }
+
+    function applyFilters() {
+      const selectedAirport = document.getElementById('filter-airport').value;
+      const selectedCategory = document.getElementById('filter-category').value;
+      const startDateVal = document.getElementById('filter-start-date').value;
+      const endDateVal = document.getElementById('filter-end-date').value;
+      const searchQuery = document.getElementById('table-search').value.toLowerCase().trim();
+
+      activeCategoryFilter = selectedCategory;
+
+      let result = [...rawDataSet];
+
+      if (selectedAirport !== 'ALL') {
+        result = result.filter(d => d.bandara === selectedAirport);
+      }
+
+      if (selectedCategory !== 'ALL') {
+        result = result.filter(d => d.jenis === selectedCategory);
+      }
+
+      if (startDateVal) {
+        const start = new Date(startDateVal);
+        start.setHours(0, 0, 0, 0);
+        result = result.filter(d => d.tanggalObj >= start);
+      }
+
+      if (endDateVal) {
+        const end = new Date(endDateVal);
+        end.setHours(23, 59, 59, 999);
+        result = result.filter(d => d.tanggalObj <= end);
+      }
+
+      if (searchQuery) {
+        result = result.filter(d => 
+          d.bandara.toLowerCase().includes(searchQuery) ||
+          d.jenis.toLowerCase().includes(searchQuery) ||
+          d.penerbangan.toLowerCase().includes(searchQuery) ||
+          d.keterangan.toLowerCase().includes(searchQuery) ||
+          d.tanggalStr.includes(searchQuery)
+        );
+      }
+
+      filteredData = result;
+      currentPage = 1;
+
+      const badge = document.getElementById('active-filter-badge');
+      if (selectedAirport === 'ALL' && selectedCategory === 'ALL' && !startDateVal && !endDateVal && !searchQuery) {
+        badge.textContent = 'Semua Data (' + filteredData.length + ')';
+        badge.className = 'px-2.5 py-1 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium';
+      } else {
+        badge.textContent = 'Filter Aktif (' + filteredData.length + ' data)';
+        badge.className = 'px-2.5 py-1 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium';
+      }
+
+      updateKPIs();
+      renderTrendChart();
+      renderCategoryInfographic();
+      renderRecapTable();
+      renderDataTable();
+    }
+
+    // Helper: Calculate and update KPI summary cards
+    function updateKPIs() {
+      const totalGangguan = filteredData.length;
+      document.getElementById('kpi-total-gangguan').textContent = totalGangguan.toLocaleString();
+
+      if (totalGangguan === 0) {
+        document.getElementById('kpi-total-bandara').textContent = '0';
+        document.getElementById('kpi-top-bandara-pct').textContent = '-';
+        document.getElementById('kpi-top-bandara-desc').textContent = 'Bandara terbanyak: -';
+        
+        document.getElementById('kpi-top-kategori-count').textContent = '0';
+        document.getElementById('kpi-top-kategori-pct').textContent = '-';
+        document.getElementById('kpi-top-kategori-desc').textContent = 'Kategori: -';
+        
+        document.getElementById('kpi-avg-daily').textContent = '0.0';
+        document.getElementById('kpi-range-info').textContent = 'Rentang Waktu: -';
+        return;
+      }
+
+      // 1. Unique Airports & Top Airport
+      const airportCounts = {};
+      filteredData.forEach(d => {
+        airportCounts[d.bandara] = (airportCounts[d.bandara] || 0) + 1;
+      });
+      const uniqueAirports = Object.keys(airportCounts).length;
+      document.getElementById('kpi-total-bandara').textContent = uniqueAirports;
+
+      const topAirport = Object.entries(airportCounts).sort((a, b) => b[1] - a[1])[0];
+      if (topAirport) {
+        const topAptPct = ((topAirport[1] / totalGangguan) * 100).toFixed(1);
+        document.getElementById('kpi-top-bandara-pct').textContent = `${topAptPct}%`;
+        document.getElementById('kpi-top-bandara-desc').textContent = `Terbanyak: ${topAirport[0]} (${topAirport[1]})`;
+      }
+
+      // 2. Top Category
+      const catCounts = {};
+      filteredData.forEach(d => {
+        catCounts[d.jenis] = (catCounts[d.jenis] || 0) + 1;
+      });
+      const topCategory = Object.entries(catCounts).sort((a, b) => b[1] - a[1])[0];
+      if (topCategory) {
+        const topCatPct = ((topCategory[1] / totalGangguan) * 100).toFixed(1);
+        document.getElementById('kpi-top-kategori-count').textContent = topCategory[1];
+        document.getElementById('kpi-top-kategori-pct').textContent = `${topCatPct}%`;
+        document.getElementById('kpi-top-kategori-desc').textContent = `Jenis: ${topCategory[0]}`;
+      }
+
+      // 3. Daily Average & Date Range Info
+      const dates = filteredData.map(d => d.tanggalObj.getTime()).sort((a, b) => a - b);
+      const minDate = new Date(dates[0]);
+      const maxDate = new Date(dates[dates.length - 1]);
+      
+      const dayDiff = Math.max(1, Math.round((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1);
+      const avgDaily = (totalGangguan / dayDiff).toFixed(1);
+
+      document.getElementById('kpi-avg-daily').textContent = avgDaily;
+      document.getElementById('kpi-range-info').textContent = `${formatDateFormatted(minDate)} - ${formatDateFormatted(maxDate)} (${dayDiff} Hari)`;
+    }
+
+    // Toggle Trend Mode Function
+    function setTrendMode(mode) {
+      trendViewMode = mode;
+      const btnDaily = document.getElementById('btn-trend-daily');
+      const btnMonthly = document.getElementById('btn-trend-monthly');
+
+      if (mode === 'daily') {
+        btnDaily.className = 'px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-blue-600 text-white shadow-md shadow-blue-500/30';
+        btnMonthly.className = 'px-4 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-all';
+      } else {
+        btnMonthly.className = 'px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-blue-600 text-white shadow-md shadow-blue-500/30';
+        btnDaily.className = 'px-4 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-all';
+      }
+
+      renderTrendChart();
+    }
+
+    // Render Trend Line Chart (Harian / Bulanan)
+    function renderTrendChart() {
+      const ctx = document.getElementById('chart-trend-line').getContext('2d');
+      if (chartTrendLine) chartTrendLine.destroy();
+
+      if (!filteredData || filteredData.length === 0) {
+        chartTrendLine = new Chart(ctx, {
+          type: 'line',
+          data: { labels: [], datasets: [] },
+          options: { responsive: true, maintainAspectRatio: false }
+        });
+        return;
+      }
+
+      const timeCounts = {};
+
+      if (trendViewMode === 'daily') {
+        // Group by YYYY-MM-DD
+        filteredData.forEach(d => {
+          const yyyy = d.tanggalObj.getFullYear();
+          const mm = String(d.tanggalObj.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.tanggalObj.getDate()).padStart(2, '0');
+          const key = `${yyyy}-${mm}-${dd}`;
+          timeCounts[key] = (timeCounts[key] || 0) + 1;
+        });
+      } else {
+        // Group by YYYY-MM (Monthly)
+        filteredData.forEach(d => {
+          const yyyy = d.tanggalObj.getFullYear();
+          const mm = String(d.tanggalObj.getMonth() + 1).padStart(2, '0');
+          const key = `${yyyy}-${mm}`;
+          timeCounts[key] = (timeCounts[key] || 0) + 1;
+        });
+      }
+
+      const sortedKeys = Object.keys(timeCounts).sort();
+      const labels = sortedKeys;
+      const values = sortedKeys.map(k => timeCounts[k]);
+
+      // Create Gradient Fill
+      const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+      gradient.addColorStop(0, 'rgba(59, 130, 246, 0.45)');
+      gradient.addColorStop(0.8, 'rgba(59, 130, 246, 0.02)');
+      gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+
+      chartTrendLine = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Jumlah Gangguan',
+            data: values,
+            borderColor: '#38bdf8',
+            borderWidth: 2.5,
+            backgroundColor: gradient,
+            fill: true,
+            tension: 0.38, // Smooth spline curve like the screenshot
+            pointBackgroundColor: '#38bdf8',
+            pointBorderColor: '#0f172a',
+            pointBorderWidth: 1.5,
+            pointRadius: values.length > 40 ? 2 : 4,
+            pointHoverRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false
+          },
+          layout: {
+            padding: { top: 25, right: 15, left: 10, bottom: 5 }
+          },
+          plugins: {
+            legend: { display: false },
+            datalabels: {
+              anchor: 'end',
+              align: 'top',
+              offset: 3,
+              color: '#f8fafc',
+              font: { weight: 'bold', size: labels.length > 30 ? 9 : 10 },
+              formatter: (val) => val > 0 ? val : '',
+              clip: false
+            },
+            tooltip: {
+              backgroundColor: 'rgba(15, 23, 42, 0.9)',
+              titleColor: '#38bdf8',
+              bodyColor: '#f8fafc',
+              borderColor: 'rgba(56, 189, 248, 0.3)',
+              borderWidth: 1,
+              padding: 10,
+              displayColors: false,
+              callbacks: {
+                title: (items) => {
+                  const raw = items[0].label;
+                  if (trendViewMode === 'monthly') {
+                    const [y, m] = raw.split('-');
+                    return `Bulan ${monthNamesIndo[parseInt(m,10)-1]} ${y}`;
+                  }
+                  return `Tanggal: ${raw}`;
+                },
+                label: (item) => ` Total Gangguan: ${item.raw} kejadian`
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: {
+                color: 'rgba(255, 255, 255, 0.04)',
+                drawBorder: false
+              },
+              ticks: {
+                color: '#64748b',
+                font: { size: 10, weight: '500' },
+                maxRotation: 0,
+                autoSkip: true,
+                maxTicksLimit: 12
+              }
+            },
+            y: {
+              grace: '20%',
+              grid: {
+                color: 'rgba(255, 255, 255, 0.05)',
+                drawBorder: false
+              },
+              ticks: {
+                color: '#64748b',
+                font: { size: 10 }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderCategoryInfographic() {
+      const categoryDataMap = {};
+      const grandTotal = filteredData.length;
+
+      filteredData.forEach(d => {
+        const cat = d.jenis;
+        const apt = d.bandara;
+
+        if (!categoryDataMap[cat]) {
+          categoryDataMap[cat] = {
+            total: 0,
+            airports: {}
+          };
+        }
+
+        categoryDataMap[cat].total += 1;
+        categoryDataMap[cat].airports[apt] = (categoryDataMap[cat].airports[apt] || 0) + 1;
+      });
+
+      const sortedCategories = Object.entries(categoryDataMap).sort((a, b) => b[1].total - a[1].total);
+      const catLabels = sortedCategories.map(item => item[0]);
+      const catTotals = sortedCategories.map(item => item[1].total);
+      const colors = catLabels.map((_, i) => colorPalette[i % colorPalette.length]);
+
+      // Render Doughnut / Pie Chart
+      const ctx = document.getElementById('chart-category-totals').getContext('2d');
+      if (chartCategoryTotals) chartCategoryTotals.destroy();
+
+      chartCategoryTotals = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: catLabels,
+          datasets: [{
+            data: catTotals,
+            backgroundColor: colors,
+            borderColor: '#0f172a',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                color: '#cbd5e1',
+                font: { size: 10 },
+                boxWidth: 12,
+                padding: 10
+              }
+            },
+            datalabels: {
+              color: '#ffffff',
+              font: { weight: 'bold', size: 10 },
+              formatter: (value) => {
+                if (grandTotal === 0 || value === 0) return '';
+                const pct = ((value / grandTotal) * 100).toFixed(0);
+                return pct > 4 ? `${pct}%` : '';
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const val = ctx.raw;
+                  const pct = grandTotal > 0 ? ((val / grandTotal) * 100).toFixed(1) : 0;
+                  return ` ${ctx.label}: ${val} insiden (${pct}%)`;
+                }
+              }
+            }
+          },
+          cutout: '60%'
+        }
+      });
+
+      // Render Breakdown Cards for Top 5 Airports per Category
+      const container = document.getElementById('category-top-airports-cards');
+      container.innerHTML = '';
+
+      if (sortedCategories.length === 0) {
+        container.innerHTML = `<div class="col-span-2 text-center text-xs text-slate-500 py-8">Tidak ada data jenis gangguan yang cocok.</div>`;
+        return;
+      }
+
+      sortedCategories.forEach(([catName, catInfo], idx) => {
+        const color = colors[idx];
+        const catPct = grandTotal > 0 ? ((catInfo.total / grandTotal) * 100).toFixed(1) : '0.0';
+
+        // Sort Top Airports for this category
+        const sortedAirports = Object.entries(catInfo.airports)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5); // Take Top 5
+
+        const card = document.createElement('div');
+        card.className = 'glass-card p-3.5 rounded-xl border border-slate-800 flex flex-col justify-between space-y-2.5 hover:border-slate-700 transition-all';
+
+        let topListHtml = '';
+        sortedAirports.forEach(([aptName, count], rank) => {
+          const aptCode = getAirportCode(aptName);
+          const aptPct = ((count / catInfo.total) * 100).toFixed(0);
+          topListHtml += `
+            <div class="flex items-center justify-between text-xs py-0.5 border-b border-slate-800/60 last:border-none">
+              <div class="flex items-center space-x-1.5 truncate">
+                <span class="w-4 h-4 rounded text-[9px] font-bold bg-slate-800 text-slate-300 flex items-center justify-center flex-shrink-0">${rank + 1}</span>
+                <span class="font-semibold text-slate-200 truncate" title="${aptName}">${aptCode}</span>
+              </div>
+              <div class="flex items-center space-x-1 flex-shrink-0 text-right">
+                <span class="font-extrabold text-emerald-400">${count}</span>
+                <span class="text-[10px] text-slate-400">(${aptPct}%)</span>
+              </div>
+            </div>
+          `;
+        });
+
+        card.innerHTML = `
+          <div>
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+              <div class="flex items-center space-x-2 truncate">
+                <span class="w-3 h-3 rounded-full flex-shrink-0" style="background-color: ${color}"></span>
+                <h4 class="font-bold text-xs text-white truncate" title="${catName}">${catName}</h4>
+              </div>
+              <span class="text-xs font-black text-white px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 flex-shrink-0 ml-1">
+                ${catInfo.total} <span class="text-[10px] font-normal text-slate-400">(${catPct}%)</span>
+              </span>
+            </div>
+            <div class="mt-2.5 space-y-1">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Top Bandara Terdampak:</span>
+              ${topListHtml}
+            </div>
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    function renderRecapTable() {
+      const head = document.getElementById('recap-table-head');
+      const body = document.getElementById('recap-table-body');
+      const foot = document.getElementById('recap-table-foot');
+      const legendContainer = document.getElementById('recap-month-legend');
+
+      if (!filteredData || filteredData.length === 0) {
+        head.innerHTML = '<tr><th class="p-3 text-center">Tidak ada data</th></tr>';
+        body.innerHTML = '<tr><td class="p-4 text-center text-slate-400">Tidak ada data gangguan yang sesuai filter.</td></tr>';
+        foot.innerHTML = '';
+        if (legendContainer) legendContainer.innerHTML = '';
+        return;
+      }
+
+      const airportCodeMap = {};
+      filteredData.forEach(d => {
+        const code = getAirportCode(d.bandara);
+        if (!airportCodeMap[code]) airportCodeMap[code] = d.bandara;
+      });
+      const airportCodes = Object.keys(airportCodeMap).sort();
+
+      const dateGroups = {};
+      filteredData.forEach(d => {
+        const isoDate = `${d.tanggalObj.getFullYear()}-${String(d.tanggalObj.getMonth() + 1).padStart(2, '0')}-${String(d.tanggalObj.getDate()).padStart(2, '0')}`;
+        if (!dateGroups[isoDate]) {
+          dateGroups[isoDate] = {
+            dateObj: d.tanggalObj,
+            formattedLabel: formatDateDayMonth(d.tanggalObj),
+            counts: {}
+          };
+        }
+        const code = getAirportCode(d.bandara);
+        dateGroups[isoDate].counts[code] = (dateGroups[isoDate].counts[code] || 0) + 1;
+      });
+
+      const sortedIsoDates = Object.keys(dateGroups).sort();
+
+      const detectedMonths = new Set();
+      sortedIsoDates.forEach(isoKey => {
+        detectedMonths.add(dateGroups[isoKey].dateObj.getMonth());
+      });
+
+      if (legendContainer) {
+        legendContainer.innerHTML = '<span class="text-slate-400 font-semibold mr-1">Legenda Warna Bulan:</span>';
+        Array.from(detectedMonths).sort((a,b) => a-b).forEach(mIdx => {
+          const mInfo = monthColorMap[mIdx] || monthColorMap[0];
+          const badge = document.createElement('span');
+          badge.className = `px-2 py-0.5 rounded text-[11px] font-medium border ${mInfo.badge}`;
+          badge.textContent = mInfo.name;
+          legendContainer.appendChild(badge);
+        });
+      }
+
+      // Header Row
+      let headHtml = `
+        <tr>
+          <th class="px-3 py-2.5 text-left bg-slate-800 text-slate-300 font-bold sticky left-0 z-30 min-w-[110px] border-r border-slate-700">TANGGAL & BULAN</th>
+      `;
+      airportCodes.forEach(code => {
+        headHtml += `<th class="px-2.5 py-2.5 text-center font-bold text-slate-300 border-r border-slate-700/50 min-w-[50px]">${code}</th>`;
+      });
+      headHtml += `<th class="px-3 py-2.5 text-center bg-blue-950/80 text-blue-200 font-extrabold sticky right-0 z-30 min-w-[80px] border-l border-slate-700">TOTAL</th></tr>`;
+      head.innerHTML = headHtml;
+
+      // Body Rows with Distinct Month Colors
+      let bodyHtml = '';
+      const airportTotals = {};
+      airportCodes.forEach(c => airportTotals[c] = 0);
+      let grandTotal = 0;
+
+      const exportRows = [];
+
+      sortedIsoDates.forEach(isoKey => {
+        const item = dateGroups[isoKey];
+        const mIdx = item.dateObj.getMonth();
+        const mStyle = monthColorMap[mIdx] || monthColorMap[0];
+
+        let rowTotal = 0;
+
+        let rowHtml = `
+          <tr class="${mStyle.rowBg} transition-colors border-b border-slate-800/80">
+            <td class="px-3 py-2 text-left font-bold ${mStyle.dateBg} sticky left-0 z-10 border-r border-slate-700 whitespace-nowrap shadow-sm">
+              ${item.formattedLabel}
+            </td>
+        `;
+
+        const exportRow = { 'Tanggal & Bulan': item.formattedLabel };
+
+        airportCodes.forEach(code => {
+          const val = item.counts[code] || 0;
+          rowTotal += val;
+          airportTotals[code] += val;
+          exportRow[code] = val;
+
+          if (val > 0) {
+            rowHtml += `<td class="px-2.5 py-2 text-center font-bold text-white border-r border-slate-800/60 bg-slate-900/30">${val}</td>`;
+          } else {
+            rowHtml += `<td class="px-2.5 py-2 text-center text-slate-500/60 border-r border-slate-800/60">0</td>`;
+          }
+        });
+
+        grandTotal += rowTotal;
+        exportRow['TOTAL'] = rowTotal;
+        exportRows.push(exportRow);
+
+        rowHtml += `
+            <td class="px-3 py-2 text-center font-black text-blue-200 bg-blue-950/60 sticky right-0 z-10 border-l border-slate-700">
+              ${rowTotal}
+            </td>
+          </tr>
+        `;
+        bodyHtml += rowHtml;
+      });
+
+      body.innerHTML = bodyHtml;
+
+      // Footer Row
+      let footHtml = `
+        <tr>
+          <td class="px-3 py-2.5 text-left font-extrabold text-amber-400 bg-slate-900 sticky left-0 z-30 border-r border-slate-700 uppercase">
+            TOTAL
+          </td>
+      `;
+
+      const exportFooter = { 'Tanggal & Bulan': 'TOTAL' };
+
+      airportCodes.forEach(code => {
+        const tot = airportTotals[code];
+        exportFooter[code] = tot;
+        footHtml += `<td class="px-2.5 py-2.5 text-center font-extrabold text-amber-300 border-r border-slate-700">${tot}</td>`;
+      });
+
+      exportFooter['TOTAL'] = grandTotal;
+      footHtml += `
+          <td class="px-3 py-2.5 text-center font-black text-emerald-400 bg-emerald-950/80 sticky right-0 z-30 border-l border-slate-700">
+            ${grandTotal}
+          </td>
+        </tr>
+      `;
+      foot.innerHTML = footHtml;
+
+      exportRows.push(exportFooter);
+      recapExportData = exportRows;
+    }
+
+    function exportRecapToExcel() {
+      if (!recapExportData || recapExportData.length === 0) {
+        showToast('Tidak ada data rekapitulasi untuk diunduh!', 'warning');
+        return;
+      }
+
+      try {
+        const ws = XLSX.utils.json_to_sheet(recapExportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Rekapitulasi Gangguan");
+        XLSX.writeFile(wb, `Rekapitulasi_Gangguan_Harian_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        showToast('Tabel rekapitulasi berhasil diunduh dalam format Excel!', 'success');
+      } catch (err) {
+        console.error(err);
+        showToast('Gagal mengunduh file Excel.', 'error');
+      }
+    }
+
+    function renderDataTable() {
+      const tbody = document.getElementById('table-body');
+      const info = document.getElementById('table-info');
+      const pagination = document.getElementById('table-pagination');
+
+      if (filteredData.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="px-4 py-8 text-center text-slate-500">
+              <i class="fa-solid fa-inbox text-3xl mb-2 block opacity-40"></i>
+              Tidak ada data gangguan yang memenuhi kriteria filter.
+            </td>
+          </tr>
+        `;
+        info.textContent = 'Menampilkan 0 dari 0 data';
+        pagination.innerHTML = '';
+        return;
+      }
+
+      const sorted = [...filteredData].sort((a, b) => {
+        let valA = a[sortColumn];
+        let valB = b[sortColumn];
+
+        if (sortColumn === 'tanggal') {
+          valA = a.tanggalObj.getTime();
+          valB = b.tanggalObj.getTime();
+        }
+
+        if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+        if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+
+      const totalItems = sorted.length;
+      const totalPages = Math.ceil(totalItems / pageSize);
+      if (currentPage > totalPages) currentPage = totalPages;
+
+      const startIndex = (currentPage - 1) * pageSize;
+      const pageData = sorted.slice(startIndex, startIndex + pageSize);
+
+      let bodyHtml = '';
+      pageData.forEach(item => {
+        bodyHtml += `
+          <tr class="hover:bg-slate-800/60 transition-colors border-b border-slate-800/60">
+            <td class="px-4 py-3 font-semibold text-slate-200 whitespace-nowrap">${item.tanggalStr}</td>
+            <td class="px-4 py-3 font-bold text-white whitespace-nowrap">
+              <span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 mr-1.5">${getAirportCode(item.bandara)}</span>
+              ${item.bandara}
+            </td>
+            <td class="px-4 py-3 text-slate-300">
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 font-medium">
+                ${item.jenis}
+              </span>
+            </td>
+            <td class="px-4 py-3 text-slate-300 font-medium">${item.penerbangan}</td>
+            <td class="px-4 py-3 text-slate-400 max-w-md truncate" title="${item.keterangan}">${item.keterangan}</td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = bodyHtml;
+
+      const endItem = Math.min(startIndex + pageSize, totalItems);
+      info.textContent = `Menampilkan ${startIndex + 1} - ${endItem} dari ${totalItems} data`;
+
+      let pageHtml = `
+        <button onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled class="px-2.5 py-1 rounded bg-slate-800 text-slate-600 cursor-not-allowed"' : 'class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"'}>
+          <i class="fa-solid fa-chevron-left"></i>
+        </button>
+      `;
+
+      for (let p = 1; p <= totalPages; p++) {
+        if (p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1)) {
+          pageHtml += `
+            <button onclick="goToPage(${p})" class="px-3 py-1 rounded text-xs font-semibold ${p === currentPage ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'}">
+              ${p}
+            </button>
+          `;
+        } else if (p === currentPage - 2 || p === currentPage + 2) {
+          pageHtml += `<span class="text-slate-600 px-1">...</span>`;
+        }
+      }
+
+      pageHtml += `
+        <button onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled class="px-2.5 py-1 rounded bg-slate-800 text-slate-600 cursor-not-allowed"' : 'class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"'}>
+          <i class="fa-solid fa-chevron-right"></i>
+        </button>
+      `;
+      pagination.innerHTML = pageHtml;
+    }
+
+    function sortTable(col) {
+      if (sortColumn === col) {
+        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortColumn = col;
+        sortDirection = 'desc';
+      }
+      renderDataTable();
+    }
+
+    function goToPage(page) {
+      const totalPages = Math.ceil(filteredData.length / pageSize);
+      if (page >= 1 && page <= totalPages) {
+        currentPage = page;
+        renderDataTable();
+      }
+    }
+
+    function changePageSize() {
+      pageSize = parseInt(document.getElementById('table-page-size').value, 10);
+      currentPage = 1;
+      renderDataTable();
+    }
+
+    function exportToCSV() {
+      if (filteredData.length === 0) {
+        showToast('Tidak ada data untuk diekspor!', 'warning');
+        return;
+      }
+
+      try {
+        const exportData = filteredData.map(d => ({
+          'Tanggal': d.tanggalStr,
+          'Bandar Udara': d.bandara,
+          'Jenis Gangguan': d.jenis,
+          'No. Penerbangan': d.penerbangan,
+          'Keterangan / Dampak': d.keterangan
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Data Gangguan");
+        XLSX.writeFile(wb, `Data_Gangguan_Bandara_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        showToast('Data berhasil diekspor ke file Excel/CSV!', 'success');
+      } catch (err) {
+        console.error(err);
+        showToast('Gagal mengekspor data.', 'error');
+      }
+    }
+
+    function resetFilters() {
+      const airportSelect = document.getElementById('filter-airport');
+      const categorySelect = document.getElementById('filter-category');
+      const startDate = document.getElementById('filter-start-date');
+      const endDate = document.getElementById('filter-end-date');
+      const searchInput = document.getElementById('table-search');
+
+      if (airportSelect) airportSelect.value = 'ALL';
+      if (categorySelect) categorySelect.value = 'ALL';
+      if (startDate) startDate.value = '';
+      if (endDate) endDate.value = '';
+      if (searchInput) searchInput.value = '';
+
+      activeCategoryFilter = 'ALL';
+
+      populateFilterDropdowns();
+      applyFilters();
+      showToast('Semua filter telah direset.', 'info');
+    }
+
+    window.setTrendMode = setTrendMode;
+    window.handleFileUpload = handleFileUpload;
+    window.exportToCSV = exportToCSV;
+    window.resetFilters = resetFilters;
+    window.applyFilters = applyFilters;
+    window.exportRecapToExcel = exportRecapToExcel;
+    window.sortTable = sortTable;
+    window.goToPage = goToPage;
+    window.changePageSize = changePageSize;
+
+    window.onload = function() {
+      generateInitialMockData();
+      populateFilterDropdowns();
+      applyFilters();
+    };
+  </script>
