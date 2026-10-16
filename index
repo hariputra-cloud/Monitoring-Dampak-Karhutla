@@ -51,6 +51,7 @@
     }
     .scrollbar-thin::-webkit-scrollbar { height: 8px; }
 
+    /* Custom style agar icon native calendar picker menjadi putih/terang & berkontras tinggi */
     input[type="date"]::-webkit-calendar-picker-indicator {
       filter: invert(0.9) sepia(1) saturate(5) hue-rotate(185deg);
       cursor: pointer;
@@ -82,6 +83,7 @@
 
         <!-- Action Buttons -->
         <div class="flex items-center space-x-3">
+          <!-- Excel Upload Button -->
           <label for="excel-upload" class="cursor-pointer inline-flex items-center space-x-2 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs sm:text-sm transition-all duration-200 shadow-lg shadow-emerald-900/30 active:scale-95">
             <i class="fa-solid fa-file-excel"></i>
             <span class="hidden sm:inline">Upload Excel/CSV</span>
@@ -89,9 +91,67 @@
             <input type="file" id="excel-upload" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileUpload(event)" />
           </label>
 
+          <!-- Export Filtered Data -->
           <button onclick="exportToCSV()" class="inline-flex items-center space-x-2 px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs sm:text-sm border border-slate-700 transition-all duration-200 active:scale-95">
             <i class="fa-solid fa-download text-blue-400"></i>
             <span class="hidden sm:inline">Ekspor Data</span>
           </button>
 
-          <button onclick="resetFilters()" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-red-900/50
+          <!-- Reset Filter -->
+          <button onclick="resetFilters()" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-red-900/50 hover:text-red-300 text-slate-400 border border-slate-700 transition-all duration-200" title="Reset Semua Filter">
+            <i class="fa-solid fa-rotate-right"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <!-- KPI 1: Total Gangguan -->
+        <div class="glass-card rounded-2xl p-4 relative overflow-hidden group hover:border-blue-500/50 transition-all">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Gangguan</span>
+            <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+          </div>
+          <div class="mt-2 flex items-baseline justify-between">
+            <span id="kpi-total-gangguan" class="text-3xl font-extrabold text-white">0</span>
+            <span class="text-xs text-blue-400 font-medium bg-blue-500/10 px-2 py-0.5 rounded-full" id="kpi-periode-label">100% Data</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-1" id="kpi-sub-total">Total insiden terdeteksi</p>
+          <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
+        </div>
+
+        <!-- KPI 2: Bandara Terdampak -->
+        <div class="glass-card rounded-2xl p-4 relative overflow-hidden group hover:border-amber-500/50 transition-all">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Bandara Terdampak</span>
+            <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
+              <i class="fa-solid fa-tower-observation"></i>
+            </div>
+          </div>
+          <div class="mt-2 flex items-baseline justify-between">
+            <span id="kpi-total-bandara" class="text-3xl font-extrabold text-white">0</span>
+            <span id="kpi-top-bandara-pct" class="text-xs text-amber-400 font-medium bg-amber-500/10 px-2 py-0.5 rounded-full">-</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-1 truncate" id="kpi-top-bandara-desc">Bandara terbanyak: -</p>
+          <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
+        </div>
+
+        <!-- KPI 3: Jenis Gangguan Terbanyak -->
+        <div class="glass-card rounded-2xl p-4 relative overflow-hidden group hover:border-red-500/50 transition-all">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Jenis Terbanyak</span>
+            <div class="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center">
+              <i class="fa-solid fa-bolt"></i>
+            </div>
+          </div>
+          <div class="mt-2 flex items-baseline justify-between">
+            <span id="kpi-top-kategori-count" class="text-3xl font-extrabold text-white">0</span>
+            <span id="kpi-top-kategori-pct" class="text-xs text-red-400 font-medium bg-red-500/10 px-2 py-0.5 rounded-full">-</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-1 truncate" id="kpi-top-kategori-desc">Kategori: -</p>
+          <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500
